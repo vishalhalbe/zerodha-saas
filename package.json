@@ -1,0 +1,14 @@
+{
+  "name": "zerodha-saas",
+  "version": "1.0.0",
+  "description": "Zerodha SaaS MVP with live prices and login flow",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "kiteconnect": "^3.1.1",
+    "socket.io": "^4.7.2"
+  }
+}
