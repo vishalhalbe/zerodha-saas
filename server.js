@@ -1,4 +1,4 @@
-// server.js — Fixed version with async and working instrument resolution
+// server.js
 import express from 'express';
 import session from 'express-session';
 import path from 'path';
@@ -55,7 +55,8 @@ app.get('/api/exchange', async (req, res) => {
 io.on('connection', (socket) => {
   console.log('✅ Client connected');
 
-  socket.on('start-stream', async ({ apiKey, accessToken }) => {
+  socket.on('start-stream', async () => {
+    const { apiKey, accessToken } = globalSession;
     if (!apiKey || !accessToken) return;
 
     const kc = new KiteConnect({ api_key: apiKey });
@@ -71,6 +72,8 @@ io.on('connection', (socket) => {
 
     const niftyFutToken = getNearestFut("NIFTY");
     const bankniftyFutToken = getNearestFut("BANKNIFTY");
+
+    console.log("✅ NIFTY FUT:", niftyFutToken, "BANKNIFTY FUT:", bankniftyFutToken);
 
     const tokens = [
       256265, // NIFTY Spot
@@ -88,12 +91,12 @@ io.on('connection', (socket) => {
     });
 
     ticker.on('ticks', (ticks) => {
-      console.log("TICKS RECEIVED:", ticks);
+      console.log("📈 Ticks received", ticks);
       socket.emit('tick', ticks);
     });
 
     ticker.on('error', (err) => {
-      console.error('Ticker error:', err);
+      console.error('❌ Ticker error:', err);
     });
 
     const ltpSymbols = [
@@ -121,7 +124,7 @@ io.on('connection', (socket) => {
         };
         socket.emit('bse-nse-arbitrage', data);
       } catch (err) {
-        console.error('LTP fetch error:', err);
+        console.error('❌ LTP fetch error:', err);
       }
     }, 5000);
 
