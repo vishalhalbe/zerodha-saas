@@ -1,3 +1,4 @@
+// ✅ UPDATED server.js with Futures + NSE-BSE Arbitrage
 import express from 'express';
 import session from 'express-session';
 import path from 'path';
@@ -17,123 +18,126 @@ const io = new SocketIO(server);
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
-app.use(session({
-  secret: 'supersecret',
-  resave: false,
-  saveUninitialized: true
-}));
+app.use(session({ secret: 'supersecret', resave: false, saveUninitialized: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Step 1: User enters API Key and Secret ---
+// --- FUTURES Expiry Calculation ---
+function getNextMonthlyExpiry() {
+  const today = new Date();
+  let month = today.getMonth();
+  let year = today.getFullYear();
+
+  function lastThursday(month, year) {
+    const lastDay = new Date(year, month + 1, 0);
+    let date = new Date(lastDay);
+    while (date.getDay() !== 4) date.setDate(date.getDate() - 1);
+    return date;
+  }
+
+  let expiry = lastThursday(month, year);
+  if (expiry < today) {
+    month = (month + 1) % 12;
+    if (month === 0) year++;
+    expiry = lastThursday(month, year);
+  }
+  return expiry.toISOString().split('T')[0];
+}
+
+// --- Register API Key & Secret ---
 app.post('/register', (req, res) => {
   const { apiKey, apiSecret } = req.body;
-  if (!apiKey || !apiSecret) return res.status(400).send('Missing API key or secret');
-
+  if (!apiKey || !apiSecret) return res.status(400).send('Missing API key/secret');
   req.session.apiKey = apiKey;
   req.session.apiSecret = apiSecret;
-
   req.session.save(() => {
-    const redirectUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`;
-    res.redirect(redirectUrl);
+    const redirect = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`;
+    res.redirect(redirect);
   });
 });
 
-// --- Step 2: Zerodha redirects to this route with request_token ---
+// --- OAuth Callback ---
 app.get('/api/exchange', async (req, res) => {
   const { request_token } = req.query;
   const { apiKey, apiSecret } = req.session;
+  if (!request_token || !apiKey || !apiSecret) return res.status(400).send('Session missing');
 
-  if (!request_token || !apiKey || !apiSecret) {
-    return res.status(400).send("Missing session or request_token");
-  }
-
+  const kc = new KiteConnect({ api_key: apiKey });
   try {
-    const kc = new KiteConnect({ api_key: apiKey });
     const response = await kc.generateSession(request_token, apiSecret);
     req.session.accessToken = response.access_token;
     req.session.save(() => {
       res.redirect('/');
     });
   } catch (err) {
-    console.error("❌ Error generating session:", err);
-    res.status(500).send("Failed to generate session");
+    console.error('❌ Access token error:', err);
+    res.status(500).send('OAuth exchange failed');
   }
 });
 
-// --- WebSocket: Send live arbitrage data ---
+// --- WebSocket Streaming ---
 io.on('connection', (socket) => {
-  console.log("🟢 Client connected");
-
+  console.log('🟢 Client connected');
   let ticker = null;
 
   socket.on('start-stream', ({ apiKey, accessToken }) => {
     if (!apiKey || !accessToken) return;
-
-    ticker = new KiteTicker({
-      api_key: apiKey,
-      access_token: accessToken
-    });
-
-    const spotTokens = {
-      NIFTY_SPOT: 256265,
-      BANKNIFTY_SPOT: 260105
-    };
-
-    const futureTokens = {
-      NIFTY_FUT: 13809946,     // Replace with latest weekly/monthly future token
-      BANKNIFTY_FUT: 13811458  // Replace with latest weekly/monthly future token
-    };
-
-    const allTokens = Object.values({ ...spotTokens, ...futureTokens });
-
-    const latestPrices = {};
-
+    ticker = new KiteTicker({ api_key: apiKey, access_token: accessToken });
     ticker.connect();
 
-    ticker.on("connect", () => {
-      console.log("✅ Ticker connected");
-      ticker.subscribe(allTokens);
-      ticker.setMode(ticker.modeFull, allTokens);
+    const indexTokens = { NIFTY: 256265, BANKNIFTY: 260105 };
+    const nseBsePairs = [
+      { symbol: 'RELIANCE', nse: 738561, bse: 13623042 },
+      { symbol: 'HDFCBANK', nse: 341249, bse: 13460482 },
+      { symbol: 'INFY', nse: 408065, bse: 13596418 },
+    ];
+
+    ticker.on('connect', () => {
+      const tokens = [indexTokens.NIFTY, indexTokens.BANKNIFTY];
+      nseBsePairs.forEach(pair => tokens.push(pair.nse, pair.bse));
+      ticker.subscribe(tokens);
+      ticker.setMode(ticker.modeLTP, tokens);
     });
 
-    ticker.on("ticks", (ticks) => {
-      ticks.forEach(t => {
-        if (Object.values(spotTokens).includes(t.instrument_token)) {
-          if (t.instrument_token === spotTokens.NIFTY_SPOT) latestPrices.NIFTY_SPOT = t.last_price;
-          if (t.instrument_token === spotTokens.BANKNIFTY_SPOT) latestPrices.BANKNIFTY_SPOT = t.last_price;
-        }
-        if (Object.values(futureTokens).includes(t.instrument_token)) {
-          if (t.instrument_token === futureTokens.NIFTY_FUT) latestPrices.NIFTY_FUT = t.last_price;
-          if (t.instrument_token === futureTokens.BANKNIFTY_FUT) latestPrices.BANKNIFTY_FUT = t.last_price;
+    const prices = { spot: {}, bse: {}, nse: {} };
+
+    ticker.on('ticks', (ticks) => {
+      ticks.forEach(tick => {
+        if (tick.instrument_token === indexTokens.NIFTY) prices.spot.NIFTY = tick.last_price;
+        else if (tick.instrument_token === indexTokens.BANKNIFTY) prices.spot.BANKNIFTY = tick.last_price;
+
+        const match = nseBsePairs.find(p => p.nse === tick.instrument_token || p.bse === tick.instrument_token);
+        if (match) {
+          if (tick.instrument_token === match.nse) prices.nse[match.symbol] = tick.last_price;
+          if (tick.instrument_token === match.bse) prices.bse[match.symbol] = tick.last_price;
         }
       });
 
-      if (latestPrices.NIFTY_SPOT && latestPrices.NIFTY_FUT) {
-        latestPrices.NIFTY_ARB = (latestPrices.NIFTY_FUT - latestPrices.NIFTY_SPOT).toFixed(2);
-      }
-      if (latestPrices.BANKNIFTY_SPOT && latestPrices.BANKNIFTY_FUT) {
-        latestPrices.BANKNIFTY_ARB = (latestPrices.BANKNIFTY_FUT - latestPrices.BANKNIFTY_SPOT).toFixed(2);
-      }
+      const arbitrage = nseBsePairs.map(({ symbol }) => {
+        const nse = prices.nse[symbol] || 0;
+        const bse = prices.bse[symbol] || 0;
+        const diff = bse && nse ? (bse - nse).toFixed(2) : '--';
+        return { symbol, nse, bse, diff };
+      });
 
-      socket.emit("arbitrage", latestPrices);
+      socket.emit('tick', {
+        nifty: prices.spot.NIFTY,
+        banknifty: prices.spot.BANKNIFTY,
+        arbitrage,
+        expiry: getNextMonthlyExpiry()
+      });
     });
 
-    ticker.on("error", (err) => {
-      console.error("❌ Ticker error:", err);
-    });
-
-    ticker.on("disconnect", () => {
-      console.log("🔌 Ticker disconnected");
-    });
+    ticker.on('error', (err) => console.error('❌ Ticker error:', err));
+    ticker.on('disconnect', () => console.log('🔌 Ticker disconnected'));
   });
 
   socket.on('disconnect', () => {
-    console.log("🔴 Client disconnected");
     if (ticker) ticker.disconnect();
+    console.log('🔴 Client disconnected');
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`✅ Running on http://localhost:${PORT}`);
 });
