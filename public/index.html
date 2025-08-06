@@ -1,86 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
   <title>Zerodha SaaS Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #e3f2fd;
-      text-align: center;
-      padding: 3rem;
-    }
-    h1 {
-      color: #1976d2;
-    }
-    .price {
-      font-size: 1.5rem;
-      margin: 1rem;
-    }
-    button {
-      background-color: #1976d2;
-      color: white;
-      border: none;
-      padding: 1rem 2rem;
-      font-size: 1rem;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-  </style>
-</head>
-<body>
-  <h1>Zerodha Live Market Dashboard</h1>
-  <div class="price">📈 NIFTY: <span id="nifty">loading...</span></div>
-  <div class="price">🏛️ BANKNIFTY: <span id="banknifty">loading...</span></div>
-
-  <br><br>
-  <button onclick="startZerodhaLogin()">🔐 Login with Zerodha</button>
-
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body style="text-align:center; background:#e6f2ff; font-family:sans-serif">
+  <h1>📊 Zerodha SaaS Dashboard</h1>
+  <div>
+    <p>📈 NIFTY: <span id="nifty">loading...</span></p>
+    <p>🏦 BANKNIFTY: <span id="banknifty">loading...</span></p>
+  </div>
+
+  <form method="POST" action="/register">
+    <input name="apiKey" placeholder="API Key" required />
+    <input name="apiSecret" placeholder="API Secret" required />
+    <button type="submit">🔐 Register & Login with Zerodha</button>
+  </form>
+
   <script>
-    function startZerodhaLogin() {
-      const apiKey = prompt("Enter Zerodha API Key:");
-      const apiSecret = prompt("Enter Zerodha API Secret:");
-      if (!apiKey || !apiSecret) {
-        alert("API Key and Secret are required.");
-        return;
-      }
-      sessionStorage.setItem("ZERODHA_API_KEY", apiKey);
-      sessionStorage.setItem("ZERODHA_API_SECRET", apiSecret);
-      const loginUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`;
-      window.location.href = loginUrl;
-    }
+    const apiKey = sessionStorage.getItem('ZERODHA_API_KEY');
+    const accessToken = localStorage.getItem('ZERODHA_ACCESS_TOKEN');
 
-    async function exchangeToken(requestToken) {
-      const apiKey = sessionStorage.getItem("ZERODHA_API_KEY");
-      const apiSecret = sessionStorage.getItem("ZERODHA_API_SECRET");
-      const raw = new TextEncoder().encode(apiKey + requestToken + apiSecret);
-      const hash = await crypto.subtle.digest("SHA-256", raw);
-      const checksum = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-
-      const res = await fetch('/api/exchange', {
-        method: 'POST',
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: apiKey, request_token: requestToken, checksum })
-      });
-
-      const data = await res.json();
-      if (data.status === "success") {
-        const token = data.data.access_token;
-        localStorage.setItem("ZERODHA_ACCESS_TOKEN", token);
-        connectSocket(apiKey, token);
-      } else {
-        alert("Exchange failed: " + data.message);
-      }
-    }
-
-    function connectSocket(apiKey, token) {
+    if (apiKey && accessToken) {
       const socket = io();
 
       socket.emit("start-stream", {
-        api_key: apiKey,
-        access_token: token
+        apiKey: apiKey,
+        accessToken: accessToken
       });
 
       socket.on("tick", (ticks) => {
@@ -92,16 +38,6 @@
           }
         });
       });
-    }
-
-    // Auto exchange on redirect
-    const requestToken = new URLSearchParams(window.location.search).get("request_token");
-    if (requestToken) {
-      exchangeToken(requestToken);
-    } else {
-      const token = localStorage.getItem("ZERODHA_ACCESS_TOKEN");
-      const key = sessionStorage.getItem("ZERODHA_API_KEY");
-      if (token && key) connectSocket(key, token);
     }
   </script>
 </body>
