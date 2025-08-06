@@ -1,59 +1,44 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Zerodha SaaS Arbitrage Dashboard</title>
+  <title>Zerodha Arbitrage Dashboard</title>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <style>
     body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #f2f9ff;
-      margin: 0;
-      padding: 0;
+      background-color: #e6f2ff;
+      font-family: sans-serif;
       text-align: center;
     }
     h1 {
-      background-color: #0077cc;
+      background: #007bff;
       color: white;
+      padding: 1rem;
       margin: 0;
-      padding: 20px;
     }
-    .tabs {
-      margin-top: 20px;
-    }
-    .tab {
-      display: inline-block;
-      padding: 10px 20px;
-      margin: 0 5px;
-      background: #e0e0e0;
-      cursor: pointer;
-      border-radius: 8px 8px 0 0;
-    }
-    .tab.active {
-      background: #ffffff;
+    .tabs button {
+      margin: 1rem;
+      padding: 0.5rem 1rem;
       font-weight: bold;
-      border-bottom: 2px solid #ffffff;
+      border: none;
+      cursor: pointer;
     }
-    .tab-content {
-      display: none;
-      background: white;
-      padding: 20px;
-      border-top: 2px solid #ccc;
-    }
-    .tab-content.active {
-      display: block;
+    .tabs .active {
+      background-color: #007bff;
+      color: white;
     }
     table {
-      margin: 20px auto;
-      border-collapse: collapse;
       width: 80%;
+      margin: 0 auto;
+      border-collapse: collapse;
+      margin-top: 1rem;
     }
     th, td {
-      padding: 12px;
       border: 1px solid #ccc;
+      padding: 0.75rem;
+      text-align: center;
     }
     th {
-      background-color: #0077cc;
+      background-color: #007bff;
       color: white;
     }
   </style>
@@ -62,106 +47,114 @@
 
   <h1>📈 Zerodha Arbitrage Dashboard</h1>
 
+  <form method="POST" action="/register">
+    <input name="apiKey" placeholder="API Key" required />
+    <input name="apiSecret" placeholder="API Secret" required />
+    <button type="submit">🔐 Register & Login with Zerodha</button>
+  </form>
+
   <div class="tabs">
-    <div class="tab active" onclick="showTab('spotFuture')">Spot vs Future</div>
-    <div class="tab" onclick="showTab('nseBse')">NSE vs BSE</div>
+    <button id="spotFutureBtn" class="active">Spot vs Future</button>
+    <button id="nseBseBtn">NSE vs BSE</button>
   </div>
 
-  <div id="spotFuture" class="tab-content active">
+  <!-- Spot vs Future Table -->
+  <div id="spotFutureTab">
     <table>
       <thead>
-        <tr><th>Index</th><th>Spot</th><th>Future</th><th>Difference</th></tr>
+        <tr>
+          <th>Index</th>
+          <th>Spot Price</th>
+          <th>Futures Price</th>
+          <th>Arbitrage (Fut - Spot)</th>
+        </tr>
       </thead>
-      <tbody>
-        <tr>
-          <td>NIFTY</td>
-          <td id="nifty-spot">...</td>
-          <td id="nifty-future">...</td>
-          <td id="nifty-diff">...</td>
-        </tr>
-        <tr>
-          <td>BANKNIFTY</td>
-          <td id="banknifty-spot">...</td>
-          <td id="banknifty-future">...</td>
-          <td id="banknifty-diff">...</td>
-        </tr>
+      <tbody id="indexTableBody">
+        <tr><td>NIFTY</td><td id="niftySpot">--</td><td id="niftyFut">--</td><td id="niftyDiff">--</td></tr>
+        <tr><td>BANKNIFTY</td><td id="bankniftySpot">--</td><td id="bankniftyFut">--</td><td id="bankniftyDiff">--</td></tr>
       </tbody>
     </table>
   </div>
 
-  <div id="nseBse" class="tab-content">
+  <!-- NSE vs BSE Table -->
+  <div id="nseBseTab" style="display:none;">
     <table>
       <thead>
-        <tr><th>Stock</th><th>NSE</th><th>BSE</th><th>Difference</th></tr>
+        <tr>
+          <th>Stock</th>
+          <th>NSE</th>
+          <th>BSE</th>
+          <th>Difference</th>
+        </tr>
       </thead>
-      <tbody>
-        <tr>
-          <td>Reliance</td>
-          <td id="reliance-nse">...</td>
-          <td id="reliance-bse">...</td>
-          <td id="reliance-diff">...</td>
-        </tr>
-        <tr>
-          <td>HDFC Bank</td>
-          <td id="hdfc-nse">...</td>
-          <td id="hdfc-bse">...</td>
-          <td id="hdfc-diff">...</td>
-        </tr>
-        <tr>
-          <td>INFY</td>
-          <td id="infy-nse">...</td>
-          <td id="infy-bse">...</td>
-          <td id="infy-diff">...</td>
-        </tr>
+      <tbody id="nsebseTableBody">
+        <tr><td>Reliance</td><td id="relianceNSE">--</td><td id="relianceBSE">--</td><td id="relianceDiff">--</td></tr>
+        <tr><td>HDFC Bank</td><td id="hdfcNSE">--</td><td id="hdfcBSE">--</td><td id="hdfcDiff">--</td></tr>
+        <tr><td>INFY</td><td id="infyNSE">--</td><td id="infyBSE">--</td><td id="infyDiff">--</td></tr>
       </tbody>
     </table>
   </div>
 
   <script>
-    const apiKey = sessionStorage.getItem("ZERODHA_API_KEY");
-    const accessToken = localStorage.getItem("ZERODHA_ACCESS_TOKEN");
+    // Toggle between Spot-Future and NSE-BSE tabs
+    const spotBtn = document.getElementById('spotFutureBtn');
+    const nseBseBtn = document.getElementById('nseBseBtn');
+    const spotTab = document.getElementById('spotFutureTab');
+    const nseTab = document.getElementById('nseBseTab');
 
+    spotBtn.addEventListener('click', () => {
+      spotBtn.classList.add('active');
+      nseBseBtn.classList.remove('active');
+      spotTab.style.display = '';
+      nseTab.style.display = 'none';
+    });
+
+    nseBseBtn.addEventListener('click', () => {
+      nseBseBtn.classList.add('active');
+      spotBtn.classList.remove('active');
+      nseTab.style.display = '';
+      spotTab.style.display = 'none';
+    });
+
+    // WebSocket connection
+    const apiKey = sessionStorage.getItem('ZERODHA_API_KEY');
+    const accessToken = localStorage.getItem('ZERODHA_ACCESS_TOKEN');
     if (apiKey && accessToken) {
       const socket = io();
+      socket.emit("start-stream", { apiKey, accessToken });
 
-      socket.emit("start-stream", {
-        apiKey: apiKey,
-        accessToken: accessToken
+      // Spot/Future ticks
+      socket.on("tick", (ticks) => {
+        ticks.forEach(tick => {
+          const lp = tick.last_price;
+          if (tick.instrument_token === 256265) document.getElementById("niftySpot").textContent = lp;
+          if (tick.instrument_token === 260105) document.getElementById("bankniftySpot").textContent = lp;
+          if (tick.instrument_token === window.niftyFutToken) {
+            document.getElementById("niftyFut").textContent = lp;
+            const spot = parseFloat(document.getElementById("niftySpot").textContent);
+            document.getElementById("niftyDiff").textContent = (lp - spot).toFixed(2);
+          }
+          if (tick.instrument_token === window.bankniftyFutToken) {
+            document.getElementById("bankniftyFut").textContent = lp;
+            const spot = parseFloat(document.getElementById("bankniftySpot").textContent);
+            document.getElementById("bankniftyDiff").textContent = (lp - spot).toFixed(2);
+          }
+        });
       });
 
-      socket.on("arbitrage", (data) => {
-        // NIFTY
-        document.getElementById("nifty-spot").textContent = data.nifty.spot;
-        document.getElementById("nifty-future").textContent = data.nifty.future;
-        document.getElementById("nifty-diff").textContent = (data.nifty.future - data.nifty.spot).toFixed(2);
-
-        // BANKNIFTY
-        document.getElementById("banknifty-spot").textContent = data.banknifty.spot;
-        document.getElementById("banknifty-future").textContent = data.banknifty.future;
-        document.getElementById("banknifty-diff").textContent = (data.banknifty.future - data.banknifty.spot).toFixed(2);
-
-        // RELIANCE
-        document.getElementById("reliance-nse").textContent = data.reliance.nse;
-        document.getElementById("reliance-bse").textContent = data.reliance.bse;
-        document.getElementById("reliance-diff").textContent = (data.reliance.nse - data.reliance.bse).toFixed(2);
-
-        // HDFC BANK
-        document.getElementById("hdfc-nse").textContent = data.hdfcbank.nse;
-        document.getElementById("hdfc-bse").textContent = data.hdfcbank.bse;
-        document.getElementById("hdfc-diff").textContent = (data.hdfcbank.nse - data.hdfcbank.bse).toFixed(2);
-
-        // INFY
-        document.getElementById("infy-nse").textContent = data.infy.nse;
-        document.getElementById("infy-bse").textContent = data.infy.bse;
-        document.getElementById("infy-diff").textContent = (data.infy.nse - data.infy.bse).toFixed(2);
+      // NSE vs BSE LTP
+      socket.on("nsebse", (data) => {
+        const update = (id, val) => document.getElementById(id).textContent = val.toFixed(2);
+        update('relianceNSE', data.reliance.nse);
+        update('relianceBSE', data.reliance.bse);
+        update('relianceDiff', data.reliance.nse - data.reliance.bse);
+        update('hdfcNSE', data.hdfc.nse);
+        update('hdfcBSE', data.hdfc.bse);
+        update('hdfcDiff', data.hdfc.nse - data.hdfc.bse);
+        update('infyNSE', data.infy.nse);
+        update('infyBSE', data.infy.bse);
+        update('infyDiff', data.infy.nse - data.infy.bse);
       });
-    }
-
-    function showTab(tabId) {
-      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-      document.getElementById(tabId).classList.add('active');
-      event.target.classList.add('active');
     }
   </script>
 </body>
