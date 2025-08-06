@@ -1,19 +1,119 @@
-<script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-<script>
-  const socket = io("https://zerodha-saas.onrender.com");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Zerodha SaaS Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #e3f2fd;
+      text-align: center;
+      padding: 3rem;
+    }
+    h1 {
+      color: #1976d2;
+    }
+    .price {
+      font-size: 1.5rem;
+      margin: 1rem;
+    }
+    button {
+      background-color: #1976d2;
+      color: white;
+      border: none;
+      padding: 1rem 2rem;
+      font-size: 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>📊 Zerodha Live Prices</h1>
 
-  const token = localStorage.getItem("ZERODHA_ACCESS_TOKEN");
-  const key = sessionStorage.getItem("ZERODHA_API_KEY");
+  <div class="price">📈 NIFTY: <span id="nifty">loading...</span></div>
+  <div class="price">🏛️ BANKNIFTY: <span id="banknifty">loading...</span></div>
 
-  socket.emit("start-stream", { api_key: key, access_token: token });
+  <br/><br/>
+  <button onclick="startZerodhaLogin()">🔐 Login with Zerodha</button>
 
-  socket.on("tick", (ticks) => {
-    ticks.forEach(tick => {
-      if (tick.instrument_token === 256265) {
-        document.getElementById("nifty").textContent = tick.last_price;
-      } else if (tick.instrument_token === 260105) {
-        document.getElementById("banknifty").textContent = tick.last_price;
+  <!-- Socket.io -->
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script>
+    function startZerodhaLogin() {
+      const apiKey = prompt("Enter your Zerodha API Key:");
+      const apiSecret = prompt("Enter your Zerodha API Secret:");
+
+      if (!apiKey || !apiSecret) {
+        alert("API Key & Secret required.");
+        return;
       }
-    });
-  });
-</script>
+
+      sessionStorage.setItem("ZERODHA_API_KEY", apiKey);
+      sessionStorage.setItem("ZERODHA_API_SECRET", apiSecret);
+
+      const loginUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`;
+      window.location.href = loginUrl;
+    }
+
+    async function generateChecksum(input) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(input);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function exchangeToken(requestToken) {
+      const apiKey = sessionStorage.getItem("ZERODHA_API_KEY");
+      const apiSecret = sessionStorage.getItem("ZERODHA_API_SECRET");
+      const checksum = await generateChecksum(apiKey + requestToken + apiSecret);
+
+      const res = await fetch('/api/exchange', {
+        method: 'POST',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey, request_token: requestToken, checksum })
+      });
+
+      const data = await res.json();
+      if (data.status === "success") {
+        const token = data.data.access_token;
+        localStorage.setItem("ZERODHA_ACCESS_TOKEN", token);
+        connectToSocket(token, apiKey);
+      } else {
+        alert("Login failed: " + (data.message || "Unknown error"));
+      }
+    }
+
+    function connectToSocket(token, apiKey) {
+      const socket = io("https://zerodha-saas.onrender.com");
+
+      socket.emit("start-stream", { api_key: apiKey, access_token: token });
+
+      socket.on("tick", (ticks) => {
+        ticks.forEach(tick => {
+          if (tick.instrument_token === 256265) {
+            document.getElementById("nifty").textContent = tick.last_price;
+          } else if (tick.instrument_token === 260105) {
+            document.getElementById("banknifty").textContent = tick.last_price;
+          }
+        });
+      });
+    }
+
+    window.onload = () => {
+      const requestToken = new URLSearchParams(window.location.search).get("request_token");
+      if (requestToken) {
+        exchangeToken(requestToken);
+      } else {
+        const accessToken = localStorage.getItem("ZERODHA_ACCESS_TOKEN");
+        const apiKey = sessionStorage.getItem("ZERODHA_API_KEY");
+        if (accessToken && apiKey) {
+          connectToSocket(accessToken, apiKey);
+        }
+      }
+    };
+  </script>
+</body>
+</html>
