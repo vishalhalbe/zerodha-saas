@@ -137,6 +137,7 @@
       socket.emit("start-stream", { apiKey, accessToken });
 
       socket.on("tick", (ticks) => {
+         console.log("Received ticks", ticks); // ✅ Add this line
         ticks.forEach(tick => {
           const lp = tick.last_price;
           if (tick.instrument_token === 256265) document.getElementById("niftySpot").textContent = lp;
