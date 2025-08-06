@@ -1,4 +1,4 @@
-// 🚀 Updated server.js for Spot vs Future + NSE vs BSE Arbitrage
+// server.js — Full working version with WebSocket + getLTP + KiteTicker
 import express from 'express';
 import session from 'express-session';
 import path from 'path';
@@ -47,7 +47,7 @@ app.get('/api/exchange', async (req, res) => {
     globalSession.accessToken = response.access_token;
     res.redirect('/');
   } catch (err) {
-    console.error('Token exchange error:', err);
+    console.error('Access token error:', err);
     res.status(500).send('Token exchange failed');
   }
 });
@@ -55,75 +55,69 @@ app.get('/api/exchange', async (req, res) => {
 io.on('connection', (socket) => {
   console.log('✅ Client connected');
 
-  socket.on('start-stream', async ({ apiKey, accessToken }) => {
+  socket.on('start-stream', ({ apiKey, accessToken }) => {
     if (!apiKey || !accessToken) return;
 
     const kc = new KiteConnect({ api_key: apiKey });
     kc.setAccessToken(accessToken);
 
-    // ✅ REST polling: NSE vs BSE Spot LTP
-    const symbols = [
+    const tokens = [
+      256265, // NIFTY spot
+      260105, // BANKNIFTY spot
+      13351426, // NIFTY current month FUT
+      13303810  // BANKNIFTY current month FUT
+    ];
+
+    const ticker = new KiteTicker({ api_key: apiKey, access_token: accessToken });
+
+    ticker.connect();
+    ticker.on('connect', () => {
+      console.log('✅ WebSocket connected');
+      ticker.subscribe(tokens);
+    });
+
+    ticker.on('ticks', (ticks) => {
+      socket.emit('tick', ticks);
+    });
+
+    ticker.on('error', (err) => {
+      console.error('Ticker error:', err);
+    });
+
+    // REST polling for BSE/NSE prices
+    const ltpSymbols = [
       'NSE:RELIANCE', 'BSE:RELIANCE',
       'NSE:HDFCBANK', 'BSE:HDFCBANK',
       'NSE:INFY', 'BSE:INFY'
     ];
 
-    const restInterval = setInterval(async () => {
+    const ltpInterval = setInterval(async () => {
       try {
-        const quotes = await kc.getLTP(symbols);
-        const data = [
-          {
-            stock: 'Reliance',
+        const quotes = await kc.getLTP(ltpSymbols);
+        const data = {
+          reliance: {
             nse: quotes['NSE:RELIANCE']?.last_price || 0,
             bse: quotes['BSE:RELIANCE']?.last_price || 0
           },
-          {
-            stock: 'HDFC Bank',
+          hdfc: {
             nse: quotes['NSE:HDFCBANK']?.last_price || 0,
             bse: quotes['BSE:HDFCBANK']?.last_price || 0
           },
-          {
-            stock: 'INFY',
+          infy: {
             nse: quotes['NSE:INFY']?.last_price || 0,
             bse: quotes['BSE:INFY']?.last_price || 0
           }
-        ];
-        socket.emit('bse-nse-arbitrage', data);
+        };
+        socket.emit('nsebse', data);
       } catch (err) {
-        console.error('BSE/NSE fetch error:', err);
+        console.error('LTP fetch error:', err);
       }
     }, 5000);
 
-    // ✅ WebSocket stream for Spot + Futures prices
-    const ticker = new KiteTicker({ api_key: apiKey, access_token: accessToken });
-
-    const instruments = {
-      niftySpot: 256265,
-      bankniftySpot: 260105,
-      niftyFut: 13585798,     // 🛠️ Update to current expiry
-      bankniftyFut: 13586562  // 🛠️ Update to current expiry
-    };
-
-    ticker.connect();
-
-    ticker.on('connected', () => {
-      console.log('📡 WebSocket connected');
-      ticker.subscribe(Object.values(instruments));
-      ticker.setMode(ticker.modeLTP, Object.values(instruments));
-    });
-
-    ticker.on('ticks', (ticks) => {
-      socket.emit('tick', ticks); // 🔁 Send to client
-    });
-
-    ticker.on('error', (err) => {
-      console.error('WS error:', err);
-    });
-
     socket.on('disconnect', () => {
+      clearInterval(ltpInterval);
+      if (ticker.connected) ticker.disconnect();
       console.log('❌ Client disconnected');
-      ticker.disconnect();
-      clearInterval(restInterval);
     });
   });
 });
