@@ -1,4 +1,4 @@
-// server.js — Full working version with WebSocket + getLTP + KiteTicker
+// server.js — Fixed version with async and working instrument resolution
 import express from 'express';
 import session from 'express-session';
 import path from 'path';
@@ -55,32 +55,29 @@ app.get('/api/exchange', async (req, res) => {
 io.on('connection', (socket) => {
   console.log('✅ Client connected');
 
-  socket.on('start-stream', ({ apiKey, accessToken }) => {
+  socket.on('start-stream', async ({ apiKey, accessToken }) => {
     if (!apiKey || !accessToken) return;
 
     const kc = new KiteConnect({ api_key: apiKey });
     kc.setAccessToken(accessToken);
 
-   const instruments = await kc.getInstruments();
-const findToken = (name, segment) =>
-  instruments.find(i => i.tradingsymbol.startsWith(name) && i.segment === segment && i.exchange === "NFO");
+    const instruments = await kc.getInstruments();
 
-const getNearestFut = (name) => {
-  const futs = instruments.filter(i => i.name === name && i.segment === 'NFO-FUT');
-  const sorted = futs.sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
-  return sorted[0]?.instrument_token;
-};
+    const getNearestFut = (name) => {
+      const futs = instruments.filter(i => i.name === name && i.segment === 'NFO-FUT');
+      const sorted = futs.sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
+      return sorted[0]?.instrument_token;
+    };
 
-const niftyFutToken = getNearestFut("NIFTY");
-const bankniftyFutToken = getNearestFut("BANKNIFTY");
+    const niftyFutToken = getNearestFut("NIFTY");
+    const bankniftyFutToken = getNearestFut("BANKNIFTY");
 
-const tokens = [
-  256265, // NIFTY Spot
-  260105, // BANKNIFTY Spot
-  niftyFutToken,
-  bankniftyFutToken
-];
-
+    const tokens = [
+      256265, // NIFTY Spot
+      260105, // BANKNIFTY Spot
+      niftyFutToken,
+      bankniftyFutToken
+    ];
 
     const ticker = new KiteTicker({ api_key: apiKey, access_token: accessToken });
 
@@ -99,7 +96,6 @@ const tokens = [
       console.error('Ticker error:', err);
     });
 
-    // REST polling for BSE/NSE prices
     const ltpSymbols = [
       'NSE:RELIANCE', 'BSE:RELIANCE',
       'NSE:HDFCBANK', 'BSE:HDFCBANK',
