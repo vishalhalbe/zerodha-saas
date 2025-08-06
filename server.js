@@ -1,18 +1,25 @@
-const express = require('express');
-const path = require('path');
-const http = require('http');
-const { KiteConnect, KiteTicker } = require('kiteconnect');
-const socketIo = require('socket.io');
-const bodyParser = require('body-parser');
-const cors = require('cors');
+// server.mjs
+import express from 'express';
+import path from 'path';
+import http from 'http';
+import { KiteConnect, KiteTicker } from 'kiteconnect';
+import { Server as SocketIO } from 'socket.io';
+import bodyParser from 'body-parser';
+import cors from 'cors';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// Equivalent to __dirname in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // --- App Setup ---
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
+const io = new SocketIO(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: '*',
+    methods: ['GET', 'POST']
   }
 });
 
