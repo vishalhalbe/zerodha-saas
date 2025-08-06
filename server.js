@@ -1,4 +1,4 @@
-// ✅ Updated server.js for NSE-BSE Arbitrage using Kite REST API (getLTP)
+// ✅ Updated server.js for Spot-Future & NSE-BSE Arbitrage
 import express from 'express';
 import session from 'express-session';
 import path from 'path';
@@ -29,7 +29,7 @@ app.post('/register', (req, res) => {
   if (!apiKey || !apiSecret) return res.status(400).send('Missing API key/secret');
   req.session.apiKey = apiKey;
   req.session.apiSecret = apiSecret;
-  globalSession = { apiKey, apiSecret }; // Save globally
+  globalSession = { apiKey, apiSecret };
   req.session.save(() => {
     const redirect = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`;
     res.redirect(redirect);
@@ -49,29 +49,59 @@ app.get('/api/exchange', async (req, res) => {
     globalSession.accessToken = response.access_token;
     res.redirect('/');
   } catch (err) {
-    console.error('Access token error:', err);
+    console.error('❌ Access token error:', err);
     res.status(500).send('Token exchange failed');
   }
 });
 
-// WebSocket & LTP Logic
+// WebSocket Logic
 io.on('connection', (socket) => {
-  console.log('Client connected');
+  console.log('🟢 Client connected');
+
+  let ticker = null;
+  let ltpInterval = null;
 
   socket.on('start-stream', async ({ apiKey, accessToken }) => {
     if (!apiKey || !accessToken) return;
 
+    // 🔁 Spot/Future live prices
+    ticker = new KiteTicker({ api_key: apiKey, access_token: accessToken });
+    ticker.connect();
+
+    ticker.on('connect', () => {
+      const tokens = [
+        256265, // NIFTY spot
+        260105, // BANKNIFTY spot
+        123456, // Replace with NIFTY FUT
+        789012  // Replace with BANKNIFTY FUT
+      ];
+      ticker.subscribe(tokens);
+      ticker.setMode(ticker.modeFull, tokens);
+    });
+
+    ticker.on('ticks', (ticks) => {
+      socket.emit('tick', ticks);
+    });
+
+    ticker.on('error', (err) => {
+      console.error('⚠️ Ticker error:', err);
+    });
+
+    ticker.on('disconnect', () => {
+      console.log('🔴 Ticker disconnected');
+    });
+
+    // 🔁 NSE-BSE arbitrage using REST
     const kc = new KiteConnect({ api_key: apiKey });
     kc.setAccessToken(accessToken);
 
-    // Start periodic LTP polling
     const symbols = [
       'NSE:RELIANCE', 'BSE:RELIANCE',
       'NSE:HDFCBANK', 'BSE:HDFCBANK',
       'NSE:INFY', 'BSE:INFY'
     ];
 
-    const interval = setInterval(async () => {
+    ltpInterval = setInterval(async () => {
       try {
         const quotes = await kc.getLTP(symbols);
         const data = [
@@ -93,18 +123,19 @@ io.on('connection', (socket) => {
         ];
         socket.emit('bse-nse-arbitrage', data);
       } catch (err) {
-        console.error('LTP fetch error:', err);
+        console.error('⚠️ LTP fetch error:', err.message);
       }
     }, 5000);
+  });
 
-    socket.on('disconnect', () => {
-      clearInterval(interval);
-      console.log('Client disconnected');
-    });
+  socket.on('disconnect', () => {
+    console.log('🔌 Client disconnected');
+    if (ticker) ticker.disconnect();
+    if (ltpInterval) clearInterval(ltpInterval);
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
