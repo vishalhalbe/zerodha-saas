@@ -61,12 +61,26 @@ io.on('connection', (socket) => {
     const kc = new KiteConnect({ api_key: apiKey });
     kc.setAccessToken(accessToken);
 
-    const tokens = [
-      256265, // NIFTY spot
-      260105, // BANKNIFTY spot
-      13351426, // NIFTY current month FUT
-      13303810  // BANKNIFTY current month FUT
-    ];
+   const instruments = await kc.getInstruments();
+const findToken = (name, segment) =>
+  instruments.find(i => i.tradingsymbol.startsWith(name) && i.segment === segment && i.exchange === "NFO");
+
+const getNearestFut = (name) => {
+  const futs = instruments.filter(i => i.name === name && i.segment === 'NFO-FUT');
+  const sorted = futs.sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
+  return sorted[0]?.instrument_token;
+};
+
+const niftyFutToken = getNearestFut("NIFTY");
+const bankniftyFutToken = getNearestFut("BANKNIFTY");
+
+const tokens = [
+  256265, // NIFTY Spot
+  260105, // BANKNIFTY Spot
+  niftyFutToken,
+  bankniftyFutToken
+];
+
 
     const ticker = new KiteTicker({ api_key: apiKey, access_token: accessToken });
 
