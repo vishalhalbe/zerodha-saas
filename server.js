@@ -109,7 +109,7 @@ io.on('connection', (socket) => {
             bse: quotes['BSE:INFY']?.last_price || 0
           }
         };
-        socket.emit('nsebse', data);
+        socket.emit('bse-nse-arbitrage', data);
       } catch (err) {
         console.error('LTP fetch error:', err);
       }
