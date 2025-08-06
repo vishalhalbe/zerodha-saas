@@ -7,6 +7,7 @@
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
+      background-color: #f5f5f5;
     }
     h1 {
       color: #1a1a1a;
@@ -15,6 +16,8 @@
       width: 80%;
       margin-bottom: 30px;
       border-collapse: collapse;
+      background-color: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     th, td {
       padding: 12px;
@@ -27,6 +30,20 @@
     }
     #dashboard {
       display: none;
+    }
+    #loginForm {
+      margin-bottom: 40px;
+    }
+    input[type="text"] {
+      padding: 8px;
+      margin: 0 10px;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -71,35 +88,32 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const params = new URLSearchParams(window.location.search);
-
-    // Replace with real tokens after login
-    let niftyFutToken = 12345678;      // <-- Replace this with actual token from server
-    let bankniftyFutToken = 23456789;  // <-- Replace this too
+    const loginForm = document.getElementById('loginForm');
+    const dashboard = document.getElementById('dashboard');
 
     if (!params.has('request_token')) {
-      document.getElementById('loginForm').style.display = 'block';
-      document.getElementById('dashboard').style.display = 'none';
+      loginForm.style.display = 'block';
+      dashboard.style.display = 'none';
     } else {
-      document.getElementById('loginForm').style.display = 'none';
-      document.getElementById('dashboard').style.display = 'block';
+      loginForm.style.display = 'none';
+      dashboard.style.display = 'block';
 
       const socket = io();
 
-      // Emit empty payload — server uses session tokens
-      socket.emit('start-stream', {});
+      socket.on('connect', () => {
+        console.log('✅ Socket connected');
+        socket.emit('start-stream');
+      });
 
       socket.on('tick', (ticks) => {
+        console.log("📈 Ticks received:", ticks);
         ticks.forEach(t => {
           const { instrument_token, last_price } = t;
-          if (instrument_token === 256265) {
-            document.getElementById("nifty-spot").textContent = last_price;
-          } else if (instrument_token === 260105) {
-            document.getElementById("banknifty-spot").textContent = last_price;
-          } else if (instrument_token === niftyFutToken) {
-            document.getElementById("nifty-fut").textContent = last_price;
-          } else if (instrument_token === bankniftyFutToken) {
-            document.getElementById("banknifty-fut").textContent = last_price;
-          }
+          if (instrument_token === 256265) document.getElementById("nifty-spot").textContent = last_price;
+          else if (instrument_token === 260105) document.getElementById("banknifty-spot").textContent = last_price;
+          else document.getElementById(
+            instrument_token.toString().includes("133") ? "nifty-fut" : "banknifty-fut"
+          ).textContent = last_price;
         });
       });
 
