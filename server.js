@@ -1,4 +1,4 @@
-// ✅ Updated server.js for Spot-Future & NSE-BSE Arbitrage
+// 🚀 Updated server.js for Spot vs Future + NSE vs BSE Arbitrage
 import express from 'express';
 import session from 'express-session';
 import path from 'path';
@@ -21,9 +21,8 @@ app.use(bodyParser.json());
 app.use(session({ secret: 'supersecret', resave: false, saveUninitialized: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-let globalSession = {}; // Store credentials across sessions
+let globalSession = {};
 
-// Register API Key and Secret
 app.post('/register', (req, res) => {
   const { apiKey, apiSecret } = req.body;
   if (!apiKey || !apiSecret) return res.status(400).send('Missing API key/secret');
@@ -36,7 +35,6 @@ app.post('/register', (req, res) => {
   });
 });
 
-// OAuth Token Exchange
 app.get('/api/exchange', async (req, res) => {
   const { request_token } = req.query;
   const { apiKey, apiSecret } = req.session;
@@ -49,59 +47,28 @@ app.get('/api/exchange', async (req, res) => {
     globalSession.accessToken = response.access_token;
     res.redirect('/');
   } catch (err) {
-    console.error('❌ Access token error:', err);
+    console.error('Token exchange error:', err);
     res.status(500).send('Token exchange failed');
   }
 });
 
-// WebSocket Logic
 io.on('connection', (socket) => {
-  console.log('🟢 Client connected');
-
-  let ticker = null;
-  let ltpInterval = null;
+  console.log('✅ Client connected');
 
   socket.on('start-stream', async ({ apiKey, accessToken }) => {
     if (!apiKey || !accessToken) return;
 
-    // 🔁 Spot/Future live prices
-    ticker = new KiteTicker({ api_key: apiKey, access_token: accessToken });
-    ticker.connect();
-
-    ticker.on('connect', () => {
-      const tokens = [
-        256265, // NIFTY spot
-        260105, // BANKNIFTY spot
-        123456, // Replace with NIFTY FUT
-        789012  // Replace with BANKNIFTY FUT
-      ];
-      ticker.subscribe(tokens);
-      ticker.setMode(ticker.modeFull, tokens);
-    });
-
-    ticker.on('ticks', (ticks) => {
-      socket.emit('tick', ticks);
-    });
-
-    ticker.on('error', (err) => {
-      console.error('⚠️ Ticker error:', err);
-    });
-
-    ticker.on('disconnect', () => {
-      console.log('🔴 Ticker disconnected');
-    });
-
-    // 🔁 NSE-BSE arbitrage using REST
     const kc = new KiteConnect({ api_key: apiKey });
     kc.setAccessToken(accessToken);
 
+    // ✅ REST polling: NSE vs BSE Spot LTP
     const symbols = [
       'NSE:RELIANCE', 'BSE:RELIANCE',
       'NSE:HDFCBANK', 'BSE:HDFCBANK',
       'NSE:INFY', 'BSE:INFY'
     ];
 
-    ltpInterval = setInterval(async () => {
+    const restInterval = setInterval(async () => {
       try {
         const quotes = await kc.getLTP(symbols);
         const data = [
@@ -123,15 +90,41 @@ io.on('connection', (socket) => {
         ];
         socket.emit('bse-nse-arbitrage', data);
       } catch (err) {
-        console.error('⚠️ LTP fetch error:', err.message);
+        console.error('BSE/NSE fetch error:', err);
       }
     }, 5000);
-  });
 
-  socket.on('disconnect', () => {
-    console.log('🔌 Client disconnected');
-    if (ticker) ticker.disconnect();
-    if (ltpInterval) clearInterval(ltpInterval);
+    // ✅ WebSocket stream for Spot + Futures prices
+    const ticker = new KiteTicker({ api_key: apiKey, access_token: accessToken });
+
+    const instruments = {
+      niftySpot: 256265,
+      bankniftySpot: 260105,
+      niftyFut: 13585798,     // 🛠️ Update to current expiry
+      bankniftyFut: 13586562  // 🛠️ Update to current expiry
+    };
+
+    ticker.connect();
+
+    ticker.on('connected', () => {
+      console.log('📡 WebSocket connected');
+      ticker.subscribe(Object.values(instruments));
+      ticker.setMode(ticker.modeLTP, Object.values(instruments));
+    });
+
+    ticker.on('ticks', (ticks) => {
+      socket.emit('tick', ticks); // 🔁 Send to client
+    });
+
+    ticker.on('error', (err) => {
+      console.error('WS error:', err);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ Client disconnected');
+      ticker.disconnect();
+      clearInterval(restInterval);
+    });
   });
 });
 
