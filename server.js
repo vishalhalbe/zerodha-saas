@@ -77,6 +77,7 @@ io.on('connection', (socket) => {
     });
 
     ticker.on('ticks', (ticks) => {
+      console.log("TICKS RECEIVED:", ticks);
       socket.emit('tick', ticks);
     });
 
