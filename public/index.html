@@ -1,0 +1,35 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Zerodha SaaS Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #f0f8ff; padding: 2em; }
+    h1 { color: #0077b6; }
+    .price-box { margin-top: 2em; font-size: 1.5em; }
+  </style>
+</head>
+<body>
+  <h1>Zerodha Live Prices</h1>
+  <div class="price-box">
+    📈 NIFTY: <span id="nifty">loading...</span><br>
+    🏦 BANKNIFTY: <span id="banknifty">loading...</span>
+  </div>
+
+  <script>
+    const socket = io();
+    socket.on("ticks", (data) => {
+      data.forEach(tick => {
+        if (tick.instrument_token === 256265) {
+          document.getElementById("nifty").innerText = tick.last_price;
+        } else if (tick.instrument_token === 260105) {
+          document.getElementById("banknifty").innerText = tick.last_price;
+        }
+      });
+    });
+  </script>
+</body>
+</html>
