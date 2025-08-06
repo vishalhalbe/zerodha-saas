@@ -2,98 +2,111 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Zerodha Arbitrage Dashboard</title>
-  <script src="https://cdn.socket.io/4.3.2/socket.io.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; background: #f9f9f9; padding: 20px; }
-    h1 { color: #333; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-    th { background-color: #4CAF50; color: white; }
-    tr:nth-child(even) { background-color: #f2f2f2; }
-    .green { color: green; }
-    .red { color: red; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h1 {
+      color: #1a1a1a;
+    }
+    table {
+      width: 80%;
+      margin-bottom: 30px;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 12px;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    th {
+      background-color: #4CAF50;
+      color: white;
+    }
+    #dashboard {
+      display: none;
+    }
   </style>
 </head>
 <body>
   <h1>Zerodha Arbitrage Dashboard</h1>
 
-  <h2>Index & Futures Prices</h2>
-  <table id="futures-table">
-    <thead>
-      <tr>
-        <th>Symbol</th>
-        <th>Spot</th>
-        <th>Futures</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td>NIFTY</td><td id="nifty-spot">-</td><td id="nifty-fut">-</td></tr>
-      <tr><td>BANKNIFTY</td><td id="banknifty-spot">-</td><td id="banknifty-fut">-</td></tr>
-    </tbody>
-  </table>
+  <!-- Login Form -->
+  <form id="loginForm" action="/register" method="POST">
+    <label>API Key:</label>
+    <input type="text" name="apiKey" required>
+    <label>API Secret:</label>
+    <input type="text" name="apiSecret" required>
+    <button type="submit">Login</button>
+  </form>
 
-  <h2>BSE vs NSE Arbitrage</h2>
-  <table id="arbitrage-table">
-    <thead>
-      <tr>
-        <th>Stock</th>
-        <th>NSE Price</th>
-        <th>BSE Price</th>
-        <th>Difference</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td>RELIANCE</td><td id="nse-reliance">-</td><td id="bse-reliance">-</td><td id="diff-reliance">-</td></tr>
-      <tr><td>HDFCBANK</td><td id="nse-hdfc">-</td><td id="bse-hdfc">-</td><td id="diff-hdfc">-</td></tr>
-      <tr><td>INFY</td><td id="nse-infy">-</td><td id="bse-infy">-</td><td id="diff-infy">-</td></tr>
-    </tbody>
-  </table>
+  <!-- Dashboard Section -->
+  <div id="dashboard">
+    <h2>Index & Futures Prices</h2>
+    <table>
+      <thead>
+        <tr><th>Symbol</th><th>Spot</th><th>Futures</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>NIFTY</td><td id="nifty-spot">-</td><td id="nifty-fut">-</td></tr>
+        <tr><td>BANKNIFTY</td><td id="banknifty-spot">-</td><td id="banknifty-fut">-</td></tr>
+      </tbody>
+    </table>
 
+    <h2>BSE vs NSE Arbitrage</h2>
+    <table>
+      <thead>
+        <tr><th>Stock</th><th>NSE Price</th><th>BSE Price</th><th>Difference</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>RELIANCE</td><td id="reliance-nse">-</td><td id="reliance-bse">-</td><td id="reliance-diff">-</td></tr>
+        <tr><td>HDFCBANK</td><td id="hdfc-nse">-</td><td id="hdfc-bse">-</td><td id="hdfc-diff">-</td></tr>
+        <tr><td>INFY</td><td id="infy-nse">-</td><td id="infy-bse">-</td><td id="infy-diff">-</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('request_token')) {
+      document.getElementById('loginForm').style.display = 'block';
+      document.getElementById('dashboard').style.display = 'none';
+    } else {
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
 
-    const apiKey = localStorage.getItem("apiKey");
-    const accessToken = localStorage.getItem("accessToken");
-    if (apiKey && accessToken) {
-      socket.emit("start-stream", { apiKey, accessToken });
+      const socket = io();
+
+      socket.emit('start-stream', {
+        apiKey: '',  // Not needed here, backend uses session
+        accessToken: ''
+      });
+
+      socket.on('tick', (ticks) => {
+        ticks.forEach(t => {
+          const { instrument_token, last_price } = t;
+          if (instrument_token === 256265) document.getElementById("nifty-spot").textContent = last_price;
+          else if (instrument_token === 260105) document.getElementById("banknifty-spot").textContent = last_price;
+          else document.getElementById(
+            instrument_token.toString().includes("133") ? "nifty-fut" : "banknifty-fut"
+          ).textContent = last_price;
+        });
+      });
+
+      socket.on('bse-nse-arbitrage', (data) => {
+        const update = (id, nse, bse) => {
+          document.getElementById(id + "-nse").textContent = nse;
+          document.getElementById(id + "-bse").textContent = bse;
+          document.getElementById(id + "-diff").textContent = (nse - bse).toFixed(2);
+        };
+        update("reliance", data.reliance.nse, data.reliance.bse);
+        update("hdfc", data.hdfc.nse, data.hdfc.bse);
+        update("infy", data.infy.nse, data.infy.bse);
+      });
     }
-
-    socket.on("tick", (ticks) => {
-      for (const tick of ticks) {
-        if (tick.instrument_token === 256265) {
-          document.getElementById("nifty-spot").innerText = tick.last_price;
-        } else if (tick.instrument_token === 260105) {
-          document.getElementById("banknifty-spot").innerText = tick.last_price;
-        } else {
-          const futPrice = tick.last_price;
-          if (tick.instrument_token > 10000000 && tick.instrument_token < 99999999) {
-            if (document.getElementById("nifty-fut").innerText === '-') {
-              document.getElementById("nifty-fut").innerText = futPrice;
-            } else {
-              document.getElementById("banknifty-fut").innerText = futPrice;
-            }
-          }
-        }
-      }
-    });
-
-    socket.on("bse-nse-arbitrage", (data) => {
-      const updateRow = (key, label) => {
-        const nse = data[key].nse;
-        const bse = data[key].bse;
-        const diff = (nse - bse).toFixed(2);
-        document.getElementById(`nse-${label}`).innerText = nse;
-        document.getElementById(`bse-${label}`).innerText = bse;
-        document.getElementById(`diff-${label}`).innerText = diff;
-        document.getElementById(`diff-${label}`).className = diff >= 0 ? 'green' : 'red';
-      };
-
-      updateRow("reliance", "reliance");
-      updateRow("hdfc", "hdfc");
-      updateRow("infy", "infy");
-    });
   </script>
 </body>
 </html>
