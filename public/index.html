@@ -1,35 +1,78 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <title>Zerodha SaaS Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #f0f8ff; padding: 2em; }
-    h1 { color: #0077b6; }
-    .price-box { margin-top: 2em; font-size: 1.5em; }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #e3f2fd;
+      text-align: center;
+      padding: 3rem;
+    }
+    h1 {
+      color: #1976d2;
+    }
+    .price {
+      font-size: 1.5rem;
+      margin: 1rem;
+    }
+    button {
+      background-color: #1976d2;
+      color: white;
+      border: none;
+      padding: 1rem 2rem;
+      font-size: 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <h1>Zerodha Live Prices</h1>
-  <div class="price-box">
-    📈 NIFTY: <span id="nifty">loading...</span><br>
-    🏦 BANKNIFTY: <span id="banknifty">loading...</span>
-  </div>
+
+  <div class="price">📈 NIFTY: <span id="nifty">loading...</span></div>
+  <div class="price">🏛️ BANKNIFTY: <span id="banknifty">loading...</span></div>
+
+  <br/><br/>
+  <button onclick="startZerodhaLogin()">🔐 Login with Zerodha</button>
 
   <script>
-    const socket = io();
-    socket.on("ticks", (data) => {
-      data.forEach(tick => {
-        if (tick.instrument_token === 256265) {
-          document.getElementById("nifty").innerText = tick.last_price;
-        } else if (tick.instrument_token === 260105) {
-          document.getElementById("banknifty").innerText = tick.last_price;
-        }
+    const tokens = {
+      'NIFTY': 'NSE:NIFTY 50',
+      'BANKNIFTY': 'NSE:NIFTY BANK'
+    };
+
+    function startZerodhaLogin() {
+      const apiKey = prompt("Enter your Zerodha API Key:");
+      const apiSecret = prompt("Enter your Zerodha API Secret:");
+      if (!apiKey || !apiSecret) {
+        alert("API Key & Secret required.");
+        return;
+      }
+      sessionStorage.setItem("ZERODHA_API_KEY", apiKey);
+      sessionStorage.setItem("ZERODHA_API_SECRET", apiSecret);
+      const url = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`;
+      window.location.href = url;
+    }
+
+    async function exchangeToken(requestToken) {
+      const apiKey = sessionStorage.getItem("ZERODHA_API_KEY");
+      const apiSecret = sessionStorage.getItem("ZERODHA_API_SECRET");
+      const raw = new TextEncoder().encode(apiKey + requestToken + apiSecret);
+      const hash = await crypto.subtle.digest("SHA-256", raw);
+      const checksum = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const res = await fetch('/api/exchange', {
+        method: 'POST',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey, request_token: requestToken, checksum })
       });
-    });
-  </script>
-</body>
-</html>
+
+      const data = await res.json();
+      if (data.status === "success") {
+        const token = data.data.access_token;
+        localStorage.setItem("ZERODHA_ACCESS_TOKEN", token);
+        connectWebSocket(token);
+      } else {
