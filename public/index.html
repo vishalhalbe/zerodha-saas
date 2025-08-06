@@ -71,6 +71,11 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const params = new URLSearchParams(window.location.search);
+
+    // Replace with real tokens after login
+    let niftyFutToken = 12345678;      // <-- Replace this with actual token from server
+    let bankniftyFutToken = 23456789;  // <-- Replace this too
+
     if (!params.has('request_token')) {
       document.getElementById('loginForm').style.display = 'block';
       document.getElementById('dashboard').style.display = 'none';
@@ -80,19 +85,21 @@
 
       const socket = io();
 
-      socket.emit('start-stream', {
-        apiKey: '',  // Not needed here, backend uses session
-        accessToken: ''
-      });
+      // Emit empty payload — server uses session tokens
+      socket.emit('start-stream', {});
 
       socket.on('tick', (ticks) => {
         ticks.forEach(t => {
           const { instrument_token, last_price } = t;
-          if (instrument_token === 256265) document.getElementById("nifty-spot").textContent = last_price;
-          else if (instrument_token === 260105) document.getElementById("banknifty-spot").textContent = last_price;
-          else document.getElementById(
-            instrument_token.toString().includes("133") ? "nifty-fut" : "banknifty-fut"
-          ).textContent = last_price;
+          if (instrument_token === 256265) {
+            document.getElementById("nifty-spot").textContent = last_price;
+          } else if (instrument_token === 260105) {
+            document.getElementById("banknifty-spot").textContent = last_price;
+          } else if (instrument_token === niftyFutToken) {
+            document.getElementById("nifty-fut").textContent = last_price;
+          } else if (instrument_token === bankniftyFutToken) {
+            document.getElementById("banknifty-fut").textContent = last_price;
+          }
         });
       });
 
