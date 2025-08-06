@@ -47,9 +47,9 @@
 
   <h1>📈 Zerodha Arbitrage Dashboard</h1>
 
-  <form method="POST" action="/register">
-    <input name="apiKey" placeholder="API Key" required />
-    <input name="apiSecret" placeholder="API Secret" required />
+  <form method="POST" action="/register" onsubmit="storeApiKey()">
+    <input id="apiKeyInput" name="apiKey" placeholder="API Key" required />
+    <input id="apiSecretInput" name="apiSecret" placeholder="API Secret" required />
     <button type="submit">🔐 Register & Login with Zerodha</button>
   </form>
 
@@ -89,14 +89,20 @@
       </thead>
       <tbody id="nsebseTableBody">
         <tr><td>Reliance</td><td id="relianceNSE">--</td><td id="relianceBSE">--</td><td id="relianceDiff">--</td></tr>
-        <tr><td>HDFC Bank</td><td id="hdfcNSE">--</td><td id="hdfcBSE">--</td><td id="hdfcDiff">--</td></tr>
+        <tr><td>HDFC Bank</td><td id="hdfcbankNSE">--</td><td id="hdfcbankBSE">--</td><td id="hdfcbankDiff">--</td></tr>
         <tr><td>INFY</td><td id="infyNSE">--</td><td id="infyBSE">--</td><td id="infyDiff">--</td></tr>
       </tbody>
     </table>
   </div>
 
   <script>
-    // Toggle between Spot-Future and NSE-BSE tabs
+    // Save API Key to localStorage
+    function storeApiKey() {
+      localStorage.setItem('ZERODHA_API_KEY', document.getElementById("apiKeyInput").value);
+      localStorage.setItem('ZERODHA_API_SECRET', document.getElementById("apiSecretInput").value);
+    }
+
+    // Tab switching
     const spotBtn = document.getElementById('spotFutureBtn');
     const nseBseBtn = document.getElementById('nseBseBtn');
     const spotTab = document.getElementById('spotFutureTab');
@@ -116,14 +122,14 @@
       spotTab.style.display = 'none';
     });
 
-    // WebSocket connection
-    const apiKey = sessionStorage.getItem('ZERODHA_API_KEY');
+    // WebSocket logic
+    const apiKey = localStorage.getItem('ZERODHA_API_KEY');
     const accessToken = localStorage.getItem('ZERODHA_ACCESS_TOKEN');
+
     if (apiKey && accessToken) {
       const socket = io();
       socket.emit("start-stream", { apiKey, accessToken });
 
-      // Spot/Future ticks
       socket.on("tick", (ticks) => {
         ticks.forEach(tick => {
           const lp = tick.last_price;
@@ -142,18 +148,13 @@
         });
       });
 
-      // NSE vs BSE LTP
       socket.on("bse-nse-arbitrage", (data) => {
-        const update = (id, val) => document.getElementById(id).textContent = val.toFixed(2);
-        update('relianceNSE', data.reliance.nse);
-        update('relianceBSE', data.reliance.bse);
-        update('relianceDiff', data.reliance.nse - data.reliance.bse);
-        update('hdfcNSE', data.hdfc.nse);
-        update('hdfcBSE', data.hdfc.bse);
-        update('hdfcDiff', data.hdfc.nse - data.hdfc.bse);
-        update('infyNSE', data.infy.nse);
-        update('infyBSE', data.infy.bse);
-        update('infyDiff', data.infy.nse - data.infy.bse);
+        data.forEach(stock => {
+          const name = stock.stock.toLowerCase().replace(/\s/g, '');
+          document.getElementById(`${name}NSE`).textContent = stock.nse.toFixed(2);
+          document.getElementById(`${name}BSE`).textContent = stock.bse.toFixed(2);
+          document.getElementById(`${name}Diff`).textContent = (stock.nse - stock.bse).toFixed(2);
+        });
       });
     }
   </script>
