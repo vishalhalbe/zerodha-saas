@@ -1,95 +1,167 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Zerodha Arbitrage Dashboard</title>
+  <meta charset="UTF-8">
+  <title>Zerodha SaaS Arbitrage Dashboard</title>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <style>
-    body { background: #e6f2ff; font-family: sans-serif; text-align: center; }
-    h1 { margin-bottom: 10px; }
-    .tab { display: inline-block; padding: 10px 20px; background: #ccc; cursor: pointer; }
-    .tab.active { background: #007BFF; color: white; font-weight: bold; }
-    .tab-content { display: none; padding-top: 20px; }
-    .tab-content.active { display: block; }
-    table { width: 80%; margin: 0 auto; border-collapse: collapse; }
-    th, td { border: 1px solid #aaa; padding: 10px; text-align: center; }
-    th { background-color: #007BFF; color: white; }
-    .positive { color: green; }
-    .negative { color: red; }
-    input { margin: 4px; padding: 6px; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f2f9ff;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    h1 {
+      background-color: #0077cc;
+      color: white;
+      margin: 0;
+      padding: 20px;
+    }
+    .tabs {
+      margin-top: 20px;
+    }
+    .tab {
+      display: inline-block;
+      padding: 10px 20px;
+      margin: 0 5px;
+      background: #e0e0e0;
+      cursor: pointer;
+      border-radius: 8px 8px 0 0;
+    }
+    .tab.active {
+      background: #ffffff;
+      font-weight: bold;
+      border-bottom: 2px solid #ffffff;
+    }
+    .tab-content {
+      display: none;
+      background: white;
+      padding: 20px;
+      border-top: 2px solid #ccc;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    table {
+      margin: 20px auto;
+      border-collapse: collapse;
+      width: 80%;
+    }
+    th, td {
+      padding: 12px;
+      border: 1px solid #ccc;
+    }
+    th {
+      background-color: #0077cc;
+      color: white;
+    }
   </style>
 </head>
 <body>
-  <h1>📈 Zerodha Arbitrage Opportunities</h1>
 
-  <form method="POST" action="/register">
-    <input name="apiKey" placeholder="API Key" required />
-    <input name="apiSecret" placeholder="API Secret" required />
-    <button type="submit">🔐 Register & Login with Zerodha</button>
-  </form>
+  <h1>📈 Zerodha Arbitrage Dashboard</h1>
 
-  <div style="margin-top: 20px">
-    <div class="tab active" onclick="switchTab('index')">Index Arbitrage</div>
-    <div class="tab" onclick="switchTab('equity')">NSE-BSE Equity Arbitrage</div>
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('spotFuture')">Spot vs Future</div>
+    <div class="tab" onclick="showTab('nseBse')">NSE vs BSE</div>
   </div>
 
-  <!-- Index Arbitrage Table -->
-  <div id="index" class="tab-content active">
+  <div id="spotFuture" class="tab-content active">
     <table>
-      <tr><th>Index</th><th>Spot Price</th><th>Futures Price</th><th>Arbitrage (Fut - Spot)</th></tr>
-      <tr><td>NIFTY</td><td id="nifty-spot">--</td><td id="nifty-fut">--</td><td id="nifty-arb">--</td></tr>
-      <tr><td>BANKNIFTY</td><td id="banknifty-spot">--</td><td id="banknifty-fut">--</td><td id="banknifty-arb">--</td></tr>
+      <thead>
+        <tr><th>Index</th><th>Spot</th><th>Future</th><th>Difference</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>NIFTY</td>
+          <td id="nifty-spot">...</td>
+          <td id="nifty-future">...</td>
+          <td id="nifty-diff">...</td>
+        </tr>
+        <tr>
+          <td>BANKNIFTY</td>
+          <td id="banknifty-spot">...</td>
+          <td id="banknifty-future">...</td>
+          <td id="banknifty-diff">...</td>
+        </tr>
+      </tbody>
     </table>
   </div>
 
-  <!-- Equity Arbitrage Table -->
-  <div id="equity" class="tab-content">
+  <div id="nseBse" class="tab-content">
     <table>
-      <tr><th>Stock</th><th>NSE Price</th><th>BSE Price</th><th>Arbitrage (NSE - BSE)</th></tr>
-      <tr><td>RELIANCE</td><td id="reliance-nse">--</td><td id="reliance-bse">--</td><td id="reliance-arb">--</td></tr>
-      <tr><td>HDFCBANK</td><td id="hdfcbank-nse">--</td><td id="hdfcbank-bse">--</td><td id="hdfcbank-arb">--</td></tr>
-      <tr><td>INFY</td><td id="infy-nse">--</td><td id="infy-bse">--</td><td id="infy-arb">--</td></tr>
+      <thead>
+        <tr><th>Stock</th><th>NSE</th><th>BSE</th><th>Difference</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Reliance</td>
+          <td id="reliance-nse">...</td>
+          <td id="reliance-bse">...</td>
+          <td id="reliance-diff">...</td>
+        </tr>
+        <tr>
+          <td>HDFC Bank</td>
+          <td id="hdfc-nse">...</td>
+          <td id="hdfc-bse">...</td>
+          <td id="hdfc-diff">...</td>
+        </tr>
+        <tr>
+          <td>INFY</td>
+          <td id="infy-nse">...</td>
+          <td id="infy-bse">...</td>
+          <td id="infy-diff">...</td>
+        </tr>
+      </tbody>
     </table>
   </div>
 
   <script>
-    const apiKey = sessionStorage.getItem('ZERODHA_API_KEY');
-    const accessToken = localStorage.getItem('ZERODHA_ACCESS_TOKEN');
+    const apiKey = sessionStorage.getItem("ZERODHA_API_KEY");
+    const accessToken = localStorage.getItem("ZERODHA_ACCESS_TOKEN");
 
     if (apiKey && accessToken) {
       const socket = io();
-      socket.emit("start-stream", { apiKey, accessToken });
 
-      socket.on("arbitrage", data => {
-        // Index Prices
+      socket.emit("start-stream", {
+        apiKey: apiKey,
+        accessToken: accessToken
+      });
+
+      socket.on("arbitrage", (data) => {
+        // NIFTY
         document.getElementById("nifty-spot").textContent = data.nifty.spot;
-        document.getElementById("nifty-fut").textContent = data.nifty.future;
-        document.getElementById("nifty-arb").innerHTML = formatDiff(data.nifty.future - data.nifty.spot);
+        document.getElementById("nifty-future").textContent = data.nifty.future;
+        document.getElementById("nifty-diff").textContent = (data.nifty.future - data.nifty.spot).toFixed(2);
 
+        // BANKNIFTY
         document.getElementById("banknifty-spot").textContent = data.banknifty.spot;
-        document.getElementById("banknifty-fut").textContent = data.banknifty.future;
-        document.getElementById("banknifty-arb").innerHTML = formatDiff(data.banknifty.future - data.banknifty.spot);
+        document.getElementById("banknifty-future").textContent = data.banknifty.future;
+        document.getElementById("banknifty-diff").textContent = (data.banknifty.future - data.banknifty.spot).toFixed(2);
 
-        // Equity Arbitrage
-        ["reliance", "hdfcbank", "infy"].forEach(stock => {
-          const nse = data[stock].nse;
-          const bse = data[stock].bse;
-          document.getElementById(`${stock}-nse`).textContent = nse;
-          document.getElementById(`${stock}-bse`).textContent = bse;
-          document.getElementById(`${stock}-arb`).innerHTML = formatDiff(nse - bse);
-        });
+        // RELIANCE
+        document.getElementById("reliance-nse").textContent = data.reliance.nse;
+        document.getElementById("reliance-bse").textContent = data.reliance.bse;
+        document.getElementById("reliance-diff").textContent = (data.reliance.nse - data.reliance.bse).toFixed(2);
+
+        // HDFC BANK
+        document.getElementById("hdfc-nse").textContent = data.hdfcbank.nse;
+        document.getElementById("hdfc-bse").textContent = data.hdfcbank.bse;
+        document.getElementById("hdfc-diff").textContent = (data.hdfcbank.nse - data.hdfcbank.bse).toFixed(2);
+
+        // INFY
+        document.getElementById("infy-nse").textContent = data.infy.nse;
+        document.getElementById("infy-bse").textContent = data.infy.bse;
+        document.getElementById("infy-diff").textContent = (data.infy.nse - data.infy.bse).toFixed(2);
       });
     }
 
-    function formatDiff(diff) {
-      const color = diff >= 0 ? 'positive' : 'negative';
-      return `<span class="${color}">${diff.toFixed(2)}</span>`;
-    }
-
-    function switchTab(tab) {
-      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-      document.getElementById(tab).classList.add("active");
-      document.querySelector(`.tab[onclick*='${tab}']`).classList.add("active");
+    function showTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      event.target.classList.add('active');
     }
   </script>
 </body>
