@@ -36,14 +36,9 @@
   <div class="price">🏛️ BANKNIFTY: <span id="banknifty">loading...</span></div>
 
   <br/><br/>
-  <button onclick="startZerodhaLogin()">🔐 Login with Zerodha</button>
+  <button id="loginBtn">🔐 Login with Zerodha</button>
 
   <script>
-    const tokens = {
-      'NIFTY': 'NSE:NIFTY 50',
-      'BANKNIFTY': 'NSE:NIFTY BANK'
-    };
-
     function startZerodhaLogin() {
       const apiKey = prompt("Enter your Zerodha API Key:");
       const apiSecret = prompt("Enter your Zerodha API Secret:");
@@ -56,6 +51,8 @@
       const url = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`;
       window.location.href = url;
     }
+
+    document.getElementById("loginBtn").onclick = startZerodhaLogin;
 
     async function exchangeToken(requestToken) {
       const apiKey = sessionStorage.getItem("ZERODHA_API_KEY");
@@ -74,5 +71,54 @@
       if (data.status === "success") {
         const token = data.data.access_token;
         localStorage.setItem("ZERODHA_ACCESS_TOKEN", token);
-        connectWebSocket(token);
+        connectWebSocket(token); // 🎯 Start websocket here
       } else {
+        alert("❌ Token exchange failed: " + data.message);
+      }
+    }
+
+    // 🔌 Connect WebSocket for live prices
+    function connectWebSocket(accessToken) {
+      const KiteTicker = new window.KiteConnect.KiteTicker({
+        api_key: sessionStorage.getItem("ZERODHA_API_KEY"),
+        access_token: accessToken
+      });
+
+      const instrumentTokens = {
+        'NIFTY': 256265,
+        'BANKNIFTY': 260105
+      };
+
+      KiteTicker.connect();
+      KiteTicker.on("connect", () => {
+        KiteTicker.subscribe([instrumentTokens.NIFTY, instrumentTokens.BANKNIFTY]);
+      });
+
+      KiteTicker.on("ticks", ticks => {
+        ticks.forEach(tick => {
+          if (tick.instrument_token === instrumentTokens.NIFTY) {
+            document.getElementById("nifty").innerText = tick.last_price;
+          }
+          if (tick.instrument_token === instrumentTokens.BANKNIFTY) {
+            document.getElementById("banknifty").innerText = tick.last_price;
+          }
+        });
+      });
+
+      KiteTicker.on("error", err => {
+        console.error("WebSocket error:", err);
+      });
+    }
+
+    // 📥 If redirected with ?request_token=..., auto-exchange
+    const urlParams = new URLSearchParams(window.location.search);
+    const requestToken = urlParams.get("request_token");
+    if (requestToken) {
+      exchangeToken(requestToken);
+    }
+  </script>
+
+  <!-- Load Kite Connect WebSocket -->
+  <script src="https://cdn.jsdelivr.net/npm/kiteconnect@4.1.0/kite.min.js"></script>
+</body>
+</html>
