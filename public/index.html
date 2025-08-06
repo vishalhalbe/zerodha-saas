@@ -1,123 +1,71 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Zerodha SaaS Dashboard</title>
+  <title>Zerodha Arbitrage Dashboard</title>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <style>
-    body {
-      text-align: center;
-      background: #e6f2ff;
-      font-family: sans-serif;
-      padding-top: 50px;
-    }
-    input {
-      margin: 5px;
-      padding: 10px;
-      width: 250px;
-    }
-    button {
-      padding: 10px 20px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
+    body { background: #e6f2ff; font-family: sans-serif; text-align: center; }
+    table { margin: 20px auto; border-collapse: collapse; width: 80%; font-size: 1.1em; }
+    th, td { border: 1px solid #ccc; padding: 10px; }
+    th { background: #007acc; color: white; }
+    .profit { color: green; font-weight: bold; }
+    .loss { color: red; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>📊 Zerodha SaaS Dashboard</h1>
+  <h1>📊 Zerodha Arbitrage Opportunities</h1>
 
-  <div>
-    <p>📈 NIFTY: <span id="nifty">loading...</span></p>
-    <p>🏦 BANKNIFTY: <span id="banknifty">loading...</span></p>
-  </div>
-
-  <form id="loginForm">
-    <input id="apiKey" placeholder="API Key" required />
-    <input id="apiSecret" placeholder="API Secret" required />
+  <form method="POST" action="/register">
+    <input name="apiKey" placeholder="API Key" required />
+    <input name="apiSecret" placeholder="API Secret" required />
     <button type="submit">🔐 Register & Login with Zerodha</button>
   </form>
 
+  <table>
+    <thead>
+      <tr>
+        <th>Index</th>
+        <th>Spot Price</th>
+        <th>Futures Price</th>
+        <th>Arbitrage (Fut - Spot)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>NIFTY</td>
+        <td id="niftySpot">--</td>
+        <td id="niftyFut">--</td>
+        <td id="niftyArb">--</td>
+      </tr>
+      <tr>
+        <td>BANKNIFTY</td>
+        <td id="bankSpot">--</td>
+        <td id="bankFut">--</td>
+        <td id="bankArb">--</td>
+      </tr>
+    </tbody>
+  </table>
+
   <script>
-    // Handle registration & redirect
-    document.getElementById('loginForm').addEventListener('submit', function (e) {
-      e.preventDefault();
-      const key = document.getElementById('apiKey').value;
-      const secret = document.getElementById('apiSecret').value;
+    const apiKey = sessionStorage.getItem('ZERODHA_API_KEY');
+    const accessToken = localStorage.getItem('ZERODHA_ACCESS_TOKEN');
 
-      if (!key || !secret) {
-        alert("API Key and Secret are required.");
-        return;
-      }
-
-      // Save to localStorage
-      localStorage.setItem('apiKey', key);
-      localStorage.setItem('apiSecret', secret);
-
-      // Redirect to Zerodha login
-      const redirectUri = encodeURIComponent(window.location.origin);
-      window.location.href = `https://kite.zerodha.com/connect/login?v=3&api_key=${key}`;
-    });
-
-    // Handle post-login (OAuth)
-    window.addEventListener('DOMContentLoaded', async () => {
-      const params = new URLSearchParams(window.location.search);
-      const requestToken = params.get("request_token");
-
-      if (requestToken) {
-        const apiKey = localStorage.getItem('apiKey');
-        const apiSecret = localStorage.getItem('apiSecret');
-
-        try {
-          const res = await fetch('/api/exchange', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ api_key: apiKey, api_secret: apiSecret, request_token: requestToken })
-          });
-
-          const data = await res.json();
-
-          if (data.access_token) {
-            localStorage.setItem("ZERODHA_ACCESS_TOKEN", data.access_token);
-            sessionStorage.setItem("ZERODHA_API_KEY", apiKey);
-
-            startSocket(apiKey, data.access_token);
-          } else {
-            alert("Failed to retrieve access token.");
-          }
-        } catch (err) {
-          console.error("Token exchange failed", err);
-          alert("Error exchanging token.");
-        }
-      } else {
-        const apiKey = sessionStorage.getItem("ZERODHA_API_KEY");
-        const accessToken = localStorage.getItem("ZERODHA_ACCESS_TOKEN");
-
-        if (apiKey && accessToken) {
-          startSocket(apiKey, accessToken);
-        }
-      }
-    });
-
-    // Start live socket stream
-    function startSocket(apiKey, accessToken) {
+    if (apiKey && accessToken) {
       const socket = io();
 
-      socket.emit("start-stream", { api_key: apiKey, access_token: accessToken });
+      socket.emit("start-stream", { apiKey, accessToken });
 
-      socket.on("tick", (ticks) => {
-        ticks.forEach(tick => {
-          if (tick.instrument_token === 256265) {
-            document.getElementById("nifty").textContent = tick.last_price;
-          } else if (tick.instrument_token === 260105) {
-            document.getElementById("banknifty").textContent = tick.last_price;
-          }
-        });
+      socket.on("arbitrage", data => {
+        document.getElementById('niftySpot').textContent = data.NIFTY_SPOT || "--";
+        document.getElementById('niftyFut').textContent = data.NIFTY_FUT || "--";
+        document.getElementById('niftyArb').textContent = data.NIFTY_ARB || "--";
+        document.getElementById('niftyArb').className = data.NIFTY_ARB > 0 ? "profit" : "loss";
+
+        document.getElementById('bankSpot').textContent = data.BANKNIFTY_SPOT || "--";
+        document.getElementById('bankFut').textContent = data.BANKNIFTY_FUT || "--";
+        document.getElementById('bankArb').textContent = data.BANKNIFTY_ARB || "--";
+        document.getElementById('bankArb').className = data.BANKNIFTY_ARB > 0 ? "profit" : "loss";
       });
-
-      socket.on("connect", () => console.log("✅ Socket connected"));
-      socket.on("disconnect", () => console.log("🔌 Socket disconnected"));
     }
   </script>
 </body>
