@@ -30,45 +30,34 @@
   </style>
 </head>
 <body>
-  <h1>📊 Zerodha Live Prices</h1>
-
+  <h1>Zerodha Live Market Dashboard</h1>
   <div class="price">📈 NIFTY: <span id="nifty">loading...</span></div>
   <div class="price">🏛️ BANKNIFTY: <span id="banknifty">loading...</span></div>
 
-  <br/><br/>
+  <br><br>
   <button onclick="startZerodhaLogin()">🔐 Login with Zerodha</button>
 
-  <!-- Socket.io -->
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script>
     function startZerodhaLogin() {
-      const apiKey = prompt("Enter your Zerodha API Key:");
-      const apiSecret = prompt("Enter your Zerodha API Secret:");
-
+      const apiKey = prompt("Enter Zerodha API Key:");
+      const apiSecret = prompt("Enter Zerodha API Secret:");
       if (!apiKey || !apiSecret) {
-        alert("API Key & Secret required.");
+        alert("API Key and Secret are required.");
         return;
       }
-
       sessionStorage.setItem("ZERODHA_API_KEY", apiKey);
       sessionStorage.setItem("ZERODHA_API_SECRET", apiSecret);
-
       const loginUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`;
       window.location.href = loginUrl;
-    }
-
-    async function generateChecksum(input) {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(input);
-      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
     async function exchangeToken(requestToken) {
       const apiKey = sessionStorage.getItem("ZERODHA_API_KEY");
       const apiSecret = sessionStorage.getItem("ZERODHA_API_SECRET");
-      const checksum = await generateChecksum(apiKey + requestToken + apiSecret);
+      const raw = new TextEncoder().encode(apiKey + requestToken + apiSecret);
+      const hash = await crypto.subtle.digest("SHA-256", raw);
+      const checksum = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 
       const res = await fetch('/api/exchange', {
         method: 'POST',
@@ -80,16 +69,19 @@
       if (data.status === "success") {
         const token = data.data.access_token;
         localStorage.setItem("ZERODHA_ACCESS_TOKEN", token);
-        connectToSocket(token, apiKey);
+        connectSocket(apiKey, token);
       } else {
-        alert("Login failed: " + (data.message || "Unknown error"));
+        alert("Exchange failed: " + data.message);
       }
     }
 
-    function connectToSocket(token, apiKey) {
-      const socket = io("https://zerodha-saas.onrender.com");
+    function connectSocket(apiKey, token) {
+      const socket = io();
 
-      socket.emit("start-stream", { api_key: apiKey, access_token: token });
+      socket.emit("start-stream", {
+        api_key: apiKey,
+        access_token: token
+      });
 
       socket.on("tick", (ticks) => {
         ticks.forEach(tick => {
@@ -102,18 +94,15 @@
       });
     }
 
-    window.onload = () => {
-      const requestToken = new URLSearchParams(window.location.search).get("request_token");
-      if (requestToken) {
-        exchangeToken(requestToken);
-      } else {
-        const accessToken = localStorage.getItem("ZERODHA_ACCESS_TOKEN");
-        const apiKey = sessionStorage.getItem("ZERODHA_API_KEY");
-        if (accessToken && apiKey) {
-          connectToSocket(accessToken, apiKey);
-        }
-      }
-    };
+    // Auto exchange on redirect
+    const requestToken = new URLSearchParams(window.location.search).get("request_token");
+    if (requestToken) {
+      exchangeToken(requestToken);
+    } else {
+      const token = localStorage.getItem("ZERODHA_ACCESS_TOKEN");
+      const key = sessionStorage.getItem("ZERODHA_API_KEY");
+      if (token && key) connectSocket(key, token);
+    }
   </script>
 </body>
 </html>
