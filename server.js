@@ -1,38 +1,27 @@
-import { KiteTicker } from "kiteconnect";
 import express from "express";
-import http from "http";
-import { Server } from "socket.io";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const PORT = process.env.PORT || 3000;
 
-let ticker;
+// Fix for __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-io.on("connection", (socket) => {
-  console.log("Client connected");
+// Serve static files from public folder
+app.use(express.static(path.join(__dirname, "public")));
 
-  socket.on("start-stream", ({ api_key, access_token }) => {
-    if (ticker) return;
-
-    ticker = new KiteTicker({ api_key, access_token });
-
-    ticker.connect();
-    ticker.on("connect", () => {
-      console.log("WebSocket connected");
-      ticker.subscribe([256265, 260105]); // NIFTY, BANKNIFTY
-    });
-
-    ticker.on("ticks", (ticks) => {
-      socket.emit("tick", ticks);
-    });
-
-    ticker.on("error", (err) => {
-      console.error("Ticker error", err);
-    });
-  });
+// Handle root route - send index.html
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-server.listen(3000, () => {
-  console.log("Server running on port 3000");
+// Your other routes (e.g. /api/exchange) go here
+app.post("/api/exchange", async (req, res) => {
+  res.json({ status: "success", data: { access_token: "demo" } });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
