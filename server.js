@@ -35,6 +35,12 @@ app.post('/register', (req, res) => {
   });
 });
 
+// Check if user session has an access token
+app.get('/api/session', (req, res) => {
+  const loggedIn = Boolean(req.session.accessToken);
+  res.json({ loggedIn });
+});
+
 app.get('/api/exchange', async (req, res) => {
   const { request_token } = req.query;
   const { apiKey, apiSecret } = req.session;

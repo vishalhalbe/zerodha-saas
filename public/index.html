@@ -87,47 +87,50 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const params = new URLSearchParams(window.location.search);
     const loginForm = document.getElementById('loginForm');
     const dashboard = document.getElementById('dashboard');
 
-    if (!params.has('request_token')) {
-      loginForm.style.display = 'block';
-      dashboard.style.display = 'none';
-    } else {
-      loginForm.style.display = 'none';
-      dashboard.style.display = 'block';
+    fetch('/api/session')
+      .then(res => res.json())
+      .then(data => {
+        if (data.loggedIn) {
+          loginForm.style.display = 'none';
+          dashboard.style.display = 'block';
 
-      const socket = io();
+          const socket = io();
 
-      socket.on('connect', () => {
-        console.log('✅ Socket connected');
-        socket.emit('start-stream');
+          socket.on('connect', () => {
+            console.log('✅ Socket connected');
+            socket.emit('start-stream');
+          });
+
+          socket.on('tick', (ticks) => {
+            console.log("📈 Ticks received:", ticks);
+            ticks.forEach(t => {
+              const { instrument_token, last_price } = t;
+              if (instrument_token === 256265) document.getElementById("nifty-spot").textContent = last_price;
+              else if (instrument_token === 260105) document.getElementById("banknifty-spot").textContent = last_price;
+              else document.getElementById(
+                instrument_token.toString().includes("133") ? "nifty-fut" : "banknifty-fut"
+              ).textContent = last_price;
+            });
+          });
+
+          socket.on('bse-nse-arbitrage', (data) => {
+            const update = (id, nse, bse) => {
+              document.getElementById(id + "-nse").textContent = nse;
+              document.getElementById(id + "-bse").textContent = bse;
+              document.getElementById(id + "-diff").textContent = (nse - bse).toFixed(2);
+            };
+            update("reliance", data.reliance.nse, data.reliance.bse);
+            update("hdfc", data.hdfc.nse, data.hdfc.bse);
+            update("infy", data.infy.nse, data.infy.bse);
+          });
+        } else {
+          loginForm.style.display = 'block';
+          dashboard.style.display = 'none';
+        }
       });
-
-      socket.on('tick', (ticks) => {
-        console.log("📈 Ticks received:", ticks);
-        ticks.forEach(t => {
-          const { instrument_token, last_price } = t;
-          if (instrument_token === 256265) document.getElementById("nifty-spot").textContent = last_price;
-          else if (instrument_token === 260105) document.getElementById("banknifty-spot").textContent = last_price;
-          else document.getElementById(
-            instrument_token.toString().includes("133") ? "nifty-fut" : "banknifty-fut"
-          ).textContent = last_price;
-        });
-      });
-
-      socket.on('bse-nse-arbitrage', (data) => {
-        const update = (id, nse, bse) => {
-          document.getElementById(id + "-nse").textContent = nse;
-          document.getElementById(id + "-bse").textContent = bse;
-          document.getElementById(id + "-diff").textContent = (nse - bse).toFixed(2);
-        };
-        update("reliance", data.reliance.nse, data.reliance.bse);
-        update("hdfc", data.hdfc.nse, data.hdfc.bse);
-        update("infy", data.infy.nse, data.infy.bse);
-      });
-    }
   </script>
 </body>
 </html>
