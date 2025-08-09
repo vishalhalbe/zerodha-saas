@@ -17,7 +17,7 @@ const io = new SocketIO(server);
 
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json()));
+app.use(bodyParser.json());
 app.use(session({ secret: 'supersecret', resave: false, saveUninitialized: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
