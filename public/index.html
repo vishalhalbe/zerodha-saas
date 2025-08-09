@@ -4,53 +4,17 @@
   <meta charset="UTF-8" />
   <title>Zerodha Arbitrage Dashboard</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background-color: #f5f5f5;
-    }
-    h1 {
-      color: #1a1a1a;
-    }
-    table {
-      width: 80%;
-      margin-bottom: 30px;
-      border-collapse: collapse;
-      background-color: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    th, td {
-      padding: 12px;
-      border: 1px solid #ccc;
-      text-align: center;
-    }
-    th {
-      background-color: #4CAF50;
-      color: white;
-    }
-    #dashboard {
-      display: none;
-    }
-    #loginForm {
-      margin-bottom: 40px;
-    }
-    input[type="text"] {
-      padding: 8px;
-      margin: 0 10px;
-    }
-    button {
-      padding: 8px 16px;
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1 { color: #1a1a1a; }
+    table { width: 80%; margin-bottom: 30px; border-collapse: collapse; }
+    th, td { padding: 12px; border: 1px solid #ccc; text-align: center; }
+    th { background-color: #4CAF50; color: white; }
+    #dashboard { display: none; }
   </style>
 </head>
 <body>
   <h1>Zerodha Arbitrage Dashboard</h1>
 
-  <!-- Login Form -->
   <form id="loginForm" action="/register" method="POST">
     <label>API Key:</label>
     <input type="text" name="apiKey" required>
@@ -59,13 +23,10 @@
     <button type="submit">Login</button>
   </form>
 
-  <!-- Dashboard Section -->
   <div id="dashboard">
     <h2>Index & Futures Prices</h2>
     <table>
-      <thead>
-        <tr><th>Symbol</th><th>Spot</th><th>Futures</th></tr>
-      </thead>
+      <thead><tr><th>Symbol</th><th>Spot</th><th>Futures</th></tr></thead>
       <tbody>
         <tr><td>NIFTY</td><td id="nifty-spot">-</td><td id="nifty-fut">-</td></tr>
         <tr><td>BANKNIFTY</td><td id="banknifty-spot">-</td><td id="banknifty-fut">-</td></tr>
@@ -74,9 +35,7 @@
 
     <h2>BSE vs NSE Arbitrage</h2>
     <table>
-      <thead>
-        <tr><th>Stock</th><th>NSE Price</th><th>BSE Price</th><th>Difference</th></tr>
-      </thead>
+      <thead><tr><th>Stock</th><th>NSE Price</th><th>BSE Price</th><th>Difference</th></tr></thead>
       <tbody>
         <tr><td>RELIANCE</td><td id="reliance-nse">-</td><td id="reliance-bse">-</td><td id="reliance-diff">-</td></tr>
         <tr><td>HDFCBANK</td><td id="hdfc-nse">-</td><td id="hdfc-bse">-</td><td id="hdfc-diff">-</td></tr>
@@ -87,50 +46,52 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const loginForm = document.getElementById('loginForm');
-    const dashboard = document.getElementById('dashboard');
+    const params = new URLSearchParams(window.location.search);
+    const loggedIn = params.get('status') === 'success' || params.has('request_token');
 
-    fetch('/api/session')
-      .then(res => res.json())
-      .then(data => {
-        if (data.loggedIn) {
-          loginForm.style.display = 'none';
-          dashboard.style.display = 'block';
+    document.getElementById('loginForm').style.display = loggedIn ? 'none' : 'block';
+    document.getElementById('dashboard').style.display = loggedIn ? 'block' : 'none';
 
-          const socket = io();
+    if (loggedIn) {
+      const socket = io();
+      console.log('Socket connecting…');
 
-          socket.on('connect', () => {
-            console.log('✅ Socket connected');
-            socket.emit('start-stream');
-          });
+      socket.on('connect', () => console.log('Socket connected'));
+      socket.on('status', (s) => console.log('[server status]', s));
 
-          socket.on('tick', (ticks) => {
-            console.log("📈 Ticks received:", ticks);
-            ticks.forEach(t => {
-              const { instrument_token, last_price } = t;
-              if (instrument_token === 256265) document.getElementById("nifty-spot").textContent = last_price;
-              else if (instrument_token === 260105) document.getElementById("banknifty-spot").textContent = last_price;
-              else document.getElementById(
-                instrument_token.toString().includes("133") ? "nifty-fut" : "banknifty-fut"
-              ).textContent = last_price;
-            });
-          });
+      // Ask server to start (it will use session creds)
+      socket.emit('start-stream');
 
-          socket.on('bse-nse-arbitrage', (data) => {
-            const update = (id, nse, bse) => {
-              document.getElementById(id + "-nse").textContent = nse;
-              document.getElementById(id + "-bse").textContent = bse;
-              document.getElementById(id + "-diff").textContent = (nse - bse).toFixed(2);
-            };
-            update("reliance", data.reliance.nse, data.reliance.bse);
-            update("hdfc", data.hdfc.nse, data.hdfc.bse);
-            update("infy", data.infy.nse, data.infy.bse);
-          });
-        } else {
-          loginForm.style.display = 'block';
-          dashboard.style.display = 'none';
+      // Ticker updates
+      socket.on('tick', (ticks) => {
+        for (const t of ticks) {
+          const { instrument_token, last_price } = t;
+          if (instrument_token === 256265) {
+            document.getElementById('nifty-spot').textContent = last_price;
+          } else if (instrument_token === 260105) {
+            document.getElementById('banknifty-spot').textContent = last_price;
+          } else {
+            // Treat the two unknowns as futures; first fill NIFTY fut, then BANKNIFTY fut
+            const nf = document.getElementById('nifty-fut');
+            const bf = document.getElementById('banknifty-fut');
+            if (nf.textContent === '-' ) nf.textContent = last_price;
+            else bf.textContent = last_price;
+          }
         }
       });
+
+      // NSE/BSE LTP
+      socket.on('nsebse', (data) => {
+        const row = (id, nse, bse) => {
+          document.getElementById(id + '-nse').textContent  = Number(nse).toFixed(2);
+          document.getElementById(id + '-bse').textContent  = Number(bse).toFixed(2);
+          document.getElementById(id + '-diff').textContent = (Number(nse) - Number(bse)).toFixed(2);
+        };
+        row('reliance', data.reliance.nse, data.reliance.bse);
+        row('hdfc',     data.hdfc.nse,     data.hdfc.bse);
+        row('infy',     data.infy.nse,     data.infy.bse);
+      });
+    }
   </script>
 </body>
 </html>
