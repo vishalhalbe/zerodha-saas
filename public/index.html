@@ -3,131 +3,221 @@
 <head>
   <meta charset="UTF-8" />
   <title>Zerodha Arbitrage Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    :root {
+      --bg: #f5f5f5;
+      --card: #fff;
+      --brand: #4CAF50;
+      --text: #1a1a1a;
+      --muted: #777;
+      --border: #ddd;
+    }
+    * { box-sizing: border-box; }
     body {
-      font-family: Arial, sans-serif;
+      font-family: Arial, Helvetica, sans-serif;
       margin: 20px;
-      background-color: #f5f5f5;
+      background: var(--bg);
+      color: var(--text);
     }
-    h1 {
-      color: #1a1a1a;
-    }
+    h1 { margin: 0 0 16px; }
+    .muted { color: var(--muted); font-size: 0.95rem; }
     table {
-      width: 80%;
-      margin-bottom: 30px;
+      width: 100%;
+      max-width: 980px;
       border-collapse: collapse;
-      background-color: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      background: var(--card);
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0 32px;
     }
     th, td {
+      border: 1px solid var(--border);
       padding: 12px;
-      border: 1px solid #ccc;
       text-align: center;
     }
     th {
-      background-color: #4CAF50;
-      color: white;
-    }
-    #dashboard {
-      display: none;
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+      font-weight: 600;
     }
     #loginForm {
-      margin-bottom: 40px;
+      display: none;
+      background: var(--card);
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 100%;
+      max-width: 980px;
+      margin: 0 0 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
     }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    label { min-width: 80px; }
     input[type="text"] {
-      padding: 8px;
-      margin: 0 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      min-width: 260px;
+      flex: 1;
     }
     button {
-      padding: 8px 16px;
-      background-color: #4CAF50;
-      color: white;
+      padding: 10px 16px;
+      background: var(--brand);
+      color: #fff;
       border: none;
+      border-radius: 6px;
       cursor: pointer;
+      font-weight: 600;
     }
+    #dashboard { display: none; }
+    #statusLine { margin: 8px 0 16px; }
+    .container { width: 100%; max-width: 1000px; }
   </style>
 </head>
 <body>
-  <h1>Zerodha Arbitrage Dashboard</h1>
+  <div class="container">
+    <h1>Zerodha Arbitrage Dashboard</h1>
+    <div id="statusLine" class="muted">Checking login status…</div>
 
-  <!-- Login Form -->
-  <form id="loginForm" action="/register" method="POST">
-    <label>API Key:</label>
-    <input type="text" name="apiKey" required>
-    <label>API Secret:</label>
-    <input type="text" name="apiSecret" required>
-    <button type="submit">Login</button>
-  </form>
+    <!-- Login Form (always available; shown only when not authenticated) -->
+    <form id="loginForm" action="/register" method="POST">
+      <div class="row" style="margin-bottom:10px;">
+        <label for="apiKey">API Key</label>
+        <input id="apiKey" type="text" name="apiKey" required />
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <label for="apiSecret">API Secret</label>
+        <input id="apiSecret" type="text" name="apiSecret" required />
+      </div>
+      <div class="row">
+        <button type="submit">🔐 Register & Login with Zerodha</button>
+        <span class="muted">You’ll be redirected to Zerodha, then back here.</span>
+      </div>
+    </form>
 
-  <!-- Dashboard Section -->
-  <div id="dashboard">
-    <h2>Index & Futures Prices</h2>
-    <table>
-      <thead>
-        <tr><th>Symbol</th><th>Spot</th><th>Futures</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>NIFTY</td><td id="nifty-spot">-</td><td id="nifty-fut">-</td></tr>
-        <tr><td>BANKNIFTY</td><td id="banknifty-spot">-</td><td id="banknifty-fut">-</td></tr>
-      </tbody>
-    </table>
+    <!-- Dashboard Section (shown only when authenticated) -->
+    <div id="dashboard">
+      <h2>Index &amp; Futures Prices</h2>
+      <table>
+        <thead>
+          <tr><th>Symbol</th><th>Spot</th><th>Futures</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>NIFTY</td><td id="nifty-spot">-</td><td id="nifty-fut">-</td></tr>
+          <tr><td>BANKNIFTY</td><td id="banknifty-spot">-</td><td id="banknifty-fut">-</td></tr>
+        </tbody>
+      </table>
 
-    <h2>BSE vs NSE Arbitrage</h2>
-    <table>
-      <thead>
-        <tr><th>Stock</th><th>NSE Price</th><th>BSE Price</th><th>Difference</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>RELIANCE</td><td id="reliance-nse">-</td><td id="reliance-bse">-</td><td id="reliance-diff">-</td></tr>
-        <tr><td>HDFCBANK</td><td id="hdfc-nse">-</td><td id="hdfc-bse">-</td><td id="hdfc-diff">-</td></tr>
-        <tr><td>INFY</td><td id="infy-nse">-</td><td id="infy-bse">-</td><td id="infy-diff">-</td></tr>
-      </tbody>
-    </table>
+      <h2>BSE vs NSE Arbitrage</h2>
+      <table>
+        <thead>
+          <tr><th>Stock</th><th>NSE Price</th><th>BSE Price</th><th>Difference</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>RELIANCE</td><td id="reliance-nse">-</td><td id="reliance-bse">-</td><td id="reliance-diff">-</td></tr>
+          <tr><td>HDFCBANK</td><td id="hdfc-nse">-</td><td id="hdfc-bse">-</td><td id="hdfc-diff">-</td></tr>
+          <tr><td>INFY</td><td id="infy-nse">-</td><td id="infy-bse">-</td><td id="infy-diff">-</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const loginForm = document.getElementById('loginForm');
-    const dashboard = document.getElementById('dashboard');
+    // ----- small helpers -----
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n) => (n === undefined || n === null || isNaN(n)) ? '-' : (+n).toFixed(2);
 
-    if (!params.has('request_token')) {
-      loginForm.style.display = 'block';
-      dashboard.style.display = 'none';
-    } else {
-      loginForm.style.display = 'none';
-      dashboard.style.display = 'block';
+    const loginForm = $('loginForm');
+    const dashboard = $('dashboard');
+    const statusLine = $('statusLine');
 
+    // These will be set when the server sends us the resolved tokens
+    let TOKEN_NIFTY_FUT = null;
+    let TOKEN_BANKNIFTY_FUT = null;
+
+    async function checkAuthAndInit() {
+      try {
+        const res = await fetch('/status', { cache: 'no-store' });
+        const st = await res.json();
+        console.log('[status]', st);
+
+        if (st.hasAccessToken) {
+          statusLine.textContent = 'Logged in. Connecting to market data…';
+          loginForm.style.display = 'none';
+          dashboard.style.display = 'block';
+          connectSocket();
+        } else {
+          statusLine.textContent = 'Not logged in. Enter your Zerodha API credentials.';
+          loginForm.style.display = 'block';
+          dashboard.style.display = 'none';
+        }
+      } catch (e) {
+        console.warn('status check failed', e);
+        statusLine.textContent = 'Could not verify login status. Try reloading.';
+        loginForm.style.display = 'block';
+        dashboard.style.display = 'none';
+      }
+    }
+
+    function connectSocket() {
       const socket = io();
 
       socket.on('connect', () => {
         console.log('✅ Socket connected');
+        statusLine.textContent = 'Socket connected. Subscribing…';
+        // Server reads creds from session; no payload needed
         socket.emit('start-stream');
       });
 
-      socket.on('tick', (ticks) => {
-        console.log("📈 Ticks received:", ticks);
-        ticks.forEach(t => {
-          const { instrument_token, last_price } = t;
-          if (instrument_token === 256265) document.getElementById("nifty-spot").textContent = last_price;
-          else if (instrument_token === 260105) document.getElementById("banknifty-spot").textContent = last_price;
-          else document.getElementById(
-            instrument_token.toString().includes("133") ? "nifty-fut" : "banknifty-fut"
-          ).textContent = last_price;
-        });
+      // breadcrumbs from server
+      socket.on('status', (s) => {
+        console.log('[server status]', s);
+        if (s?.step === 'tokens') {
+          // the server will send the exact futures tokens it subscribed to
+          const t = s.tokens || [];
+          // simple mapper: find which two are NOT the known spot tokens
+          const futs = t.filter(x => x !== 256265 && x !== 260105);
+          TOKEN_NIFTY_FUT = futs[0] ?? null;
+          TOKEN_BANKNIFTY_FUT = futs[1] ?? null;
+        }
+        if (s?.step === 'ticker-subscribed') {
+          statusLine.textContent = 'Live prices streaming…';
+        }
+        if (s?.level === 'error' || s?.step === 'error' || s?.step === 'fatal') {
+          statusLine.textContent = 'Error: ' + (s.message || 'unknown');
+        }
       });
 
-      socket.on('bse-nse-arbitrage', (data) => {
-        const update = (id, nse, bse) => {
-          document.getElementById(id + "-nse").textContent = nse;
-          document.getElementById(id + "-bse").textContent = bse;
-          document.getElementById(id + "-diff").textContent = (nse - bse).toFixed(2);
+      // Spot/Futures updates
+      socket.on('tick', (ticks = []) => {
+        for (const t of ticks) {
+          const tok = t.instrument_token, lp = t.last_price;
+          if (tok === 256265) $('nifty-spot').textContent = fmt(lp);
+          else if (tok === 260105) $('banknifty-spot').textContent = fmt(lp);
+          else if (tok === TOKEN_NIFTY_FUT) $('nifty-fut').textContent = fmt(lp);
+          else if (tok === TOKEN_BANKNIFTY_FUT) $('banknifty-fut').textContent = fmt(lp);
+        }
+      });
+
+      // NSE vs BSE table via REST polling on the server
+      socket.on('bse-nse-arbitrage', (d) => {
+        const setRow = (base, nse, bse) => {
+          $(`${base}-nse`).textContent  = fmt(nse);
+          $(`${base}-bse`).textContent  = fmt(bse);
+          $(`${base}-diff`).textContent = (nse && bse) ? fmt(nse - bse) : '-';
         };
-        update("reliance", data.reliance.nse, data.reliance.bse);
-        update("hdfc", data.hdfc.nse, data.hdfc.bse);
-        update("infy", data.infy.nse, data.infy.bse);
+        setRow('reliance', d?.reliance?.nse, d?.reliance?.bse);
+        setRow('hdfc',     d?.hdfc?.nse,     d?.hdfc?.bse);
+        setRow('infy',     d?.infy?.nse,     d?.infy?.bse);
       });
     }
+
+    // Kick off
+    checkAuthAndInit();
   </script>
 </body>
 </html>
